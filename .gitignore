@@ -1,1 +1,15 @@
 *.log
+
+# Secrets
+.env
+*.env
+*.pem
+*.key
+*.crt
+*.gpg
+*.asc
+*.secret
+secrets.*
+secret.*
+id_*
+
