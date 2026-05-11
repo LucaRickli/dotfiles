@@ -1,5 +1,16 @@
 # Dotfiles
 
+## Assumptions
+
+- Arch Linux installed
+- User has `sudo` privileges
+
+Relevant for secure-boot:
+
+- Unified kernel images (UKI) enabled
+- Systemd-boot as bootloader
+- Btrfs root with subvolumes
+
 ## Install
 
 Clone This Repo
