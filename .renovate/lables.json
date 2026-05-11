@@ -1,0 +1,29 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    {
+      "matchUpdateupdate/": ["major"],
+      "labels": ["update/major"]
+    },
+    {
+      "matchUpdateupdate/": ["minor"],
+      "labels": ["update/minor"]
+    },
+    {
+      "matchUpdateupdate/": ["patch"],
+      "labels": ["update/patch"]
+    },
+    {
+      "matchUpdateupdate/": ["digest"],
+      "labels": ["update/digest"]
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "addLabels": ["renovate/github-action"]
+    },
+    {
+      "matchDatasources": ["github-releases"],
+      "addLabels": ["renovate/github-release"]
+    }
+  ]
+}

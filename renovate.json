@@ -1,6 +1,12 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    "github>lucarickli/dotfiles//.renovate/customManagers.json",
+    "github>lucarickli/dotfiles//.renovate/lables.json",
+    ":disableRateLimiting",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":timezone(Europe/Zurich)"
   ]
 }
