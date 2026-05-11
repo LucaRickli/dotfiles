@@ -6,7 +6,7 @@
       "description": "GitHub releases with duplicated version (no v-prefix) in asset name",
       "fileMatch": ["\\.ya?ml(\\.j2)?$"],
       "matchStrings": [
-        "https:\\/\\/github.com\\/(?<depName>[^\\/]+\\/[^\\/]+)\\/releases\\/download\\/v?(?<currentValue>[^\\/]+)\\/(?<assetName>[^_]+)_(?<currentValue2>[0-9]+\\.[0-9]+\\.[0-9]+)_(?<suffix>[^\\s\"']+)"
+        "^https:\\/\\/github.com\\/(?<depName>[^\\/]+\\/[^\\/]+)\\/releases\\/download\\/v?(?<currentValue>[^\\/]+)\\/(?<assetName>[^_]+)_(?<currentValue2>[0-9]+\\.[0-9]+\\.[0-9]+)_(?<suffix>[^\\s\"']+)$"
       ],
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver",
@@ -17,7 +17,7 @@
       "description": "GitHub releases with duplicated version (with v-prefix) in asset name",
       "fileMatch": ["\\.ya?ml(\\.j2)?$"],
       "matchStrings": [
-        "https:\\/\\/github.com\\/(?<depName>[^\\/]+\\/[^\\/]+)\\/releases\\/download\\/v?(?<currentValue>[^\\/]+)\\/(?<assetName>[^_]+)_v(?<currentValue2>[0-9]+\\.[0-9]+\\.[0-9]+)_(?<suffix>[^\\s\"']+)"
+        "^https:\\/\\/github.com\\/(?<depName>[^\\/]+\\/[^\\/]+)\\/releases\\/download\\/v?(?<currentValue>[^\\/]+)\\/(?<assetName>[^_]+)_v(?<currentValue2>[0-9]+\\.[0-9]+\\.[0-9]+)_(?<suffix>[^\\s\"']+)$"
       ],
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver",
@@ -28,8 +28,8 @@
       "description": "Normal GitHub release assets (no version inside asset name)",
       "fileMatch": ["\\.ya?ml(\\.j2)?$"],
       "matchStrings": [
-        "https:\\/\\/github.com\\/(?<depName>\\S+?\\/\\S+?)\\/releases\\/download\\/(?<currentValue>(v|\\d)\\S+?)\\/[^\\s\"'\\/_]+(-[^\\s\"'\\/]*)?",
-        "https:\\/\\/github.com\\/(?<depName>\\S+?\\/\\S+?)\\/releases\\/download\\/(?<currentValue>(v|\\d)\\S+?)\\/[^\\s\"'\\/_]+_[a-uw-zA-UW-Z][^\\s\"'\\/]*"
+        "^https:\\/\\/github.com\\/(?<depName>\\S+?\\/\\S+?)\\/releases\\/download\\/(?<currentValue>(v|\\d)\\S+?)\\/[^\\s\"'\\/_]+(-[^\\s\"'\\/]*)?$",
+        "^https:\\/\\/github.com\\/(?<depName>\\S+?\\/\\S+?)\\/releases\\/download\\/(?<currentValue>(v|\\d)\\S+?)\\/[^\\s\"'\\/_]+_[a-uw-zA-UW-Z][^\\s\"'\\/]*$"
       ],
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
