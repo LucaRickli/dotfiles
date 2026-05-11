@@ -1,0 +1,2 @@
+noctalia-shell
+python-pywalfox

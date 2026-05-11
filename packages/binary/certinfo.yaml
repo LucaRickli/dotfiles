@@ -1,0 +1,3 @@
+src: https://github.com/pete911/certinfo/releases/download/v1.0.40/certinfo_1.0.40_linux_amd64.tar.gz
+dst: /usr/local/bin/certinfo
+process: "mkdir -p $tmpdir/unpacked && tar -xvzf $tmpfile -C $tmpdir/unpacked && mv $tmpdir/unpacked/certinfo $tmpfile"

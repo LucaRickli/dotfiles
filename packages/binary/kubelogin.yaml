@@ -1,0 +1,3 @@
+src: https://github.com/int128/kubelogin/releases/download/v1.36.1/kubelogin_linux_amd64.zip
+dst: /usr/local/bin/kubectl-oidc_login
+process: "mkdir -p $tmpdir/unpacked && unzip -j $tmpfile -d $tmpdir/unpacked/ && mv $tmpdir/unpacked/kubelogin $tmpfile"

@@ -1,0 +1,3 @@
+src: https://github.com/skyhook-io/radar/releases/download/v1.5.13/radar_v1.5.13_linux_amd64.tar.gz
+dst: /usr/local/bin/kubectl-radar
+process: "mkdir -p $tmpdir/unpacked && tar -xvzf $tmpfile -C $tmpdir/unpacked/ && mv $tmpdir/unpacked/kubectl-radar $tmpfile"

@@ -1,0 +1,3 @@
+visual-studio-code-bin
+bruno
+onlyoffice-bin

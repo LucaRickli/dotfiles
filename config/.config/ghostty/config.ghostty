@@ -1,0 +1,4 @@
+theme = noctalia
+
+gtk-wide-tabs = false
+gtk-custom-css = ~/.config/ghostty/themes/custom/tabs.css

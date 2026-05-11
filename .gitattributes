@@ -1,0 +1,14 @@
+# Always store and check out shell scripts / config files with LF
+# so they work correctly on Linux regardless of the OS doing the editing.
+* text=auto
+
+*.sh        text eol=lf
+*.conf      text eol=lf
+*.fish      text eol=lf
+*.ini       text eol=lf
+*.css       text eol=lf
+*.jsonc     text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+*.txt       text eol=lf
+config/mako/config  text eol=lf

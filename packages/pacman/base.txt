@@ -1,0 +1,33 @@
+# Base (already installed by paru)
+git
+base-devel
+
+# Symlink farm manager (config)
+stow
+
+# Scripting utilities
+curl
+jq
+yq
+
+# Niri / Wayland
+niri
+xwayland-satellite
+xdg-desktop-portal-gnome
+xdg-desktop-portal-gtk
+matugen
+qt6-multimedia-ffmpeg
+
+# Gnome (fallback / rdp window manager)
+gnome-control-center
+
+# Display Manager
+gdm
+
+# Terminal
+ghostty
+fish
+fastfetch
+
+# Dev tools
+bind

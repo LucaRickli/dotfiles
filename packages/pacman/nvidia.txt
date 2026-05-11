@@ -1,0 +1,24 @@
+# --- Proprietary Driver ---
+# Use nvidia-dkms instead of nvidia if on a custom/LTS kernel:
+#   nvidia-dkms
+nvidia
+nvidia-utils
+nvidia-settings
+
+# --- 32-bit support (Steam, Wine, Proton) ---
+# REQUIRES multilib repo enabled in /etc/pacman.conf first:
+#   [multilib]
+#   Include = /etc/pacman.d/mirrorlist
+# Uncomment the line below only after enabling multilib:
+# lib32-nvidia-utils
+
+# --- Wayland EGL platform support ---
+# Required for Hyprland to use the NVIDIA GPU on Wayland.
+egl-wayland
+
+# --- Hardware Video Acceleration (VA-API) ---
+# Enables GPU-accelerated video decode in Firefox, mpv, etc.
+libva-nvidia-driver
+
+# --- OpenCL (optional, for GPU compute workloads) ---
+# opencl-nvidia
