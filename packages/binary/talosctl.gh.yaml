@@ -1,2 +1,2 @@
-src: https://github.com/siderolabs/talos/releases/download/v1.13.0/talosctl-linux-amd64
+src: https://github.com/siderolabs/talos/releases/download/v1.13.2/talosctl-linux-amd64
 dst: /usr/local/bin/talosctl
