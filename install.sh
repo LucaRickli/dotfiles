@@ -13,9 +13,10 @@ log="$SCRIPTS_DIR/log.sh"
 setup_secureboot="$SCRIPTS_DIR/setup-secureboot.sh"
 install_paru="$SCRIPTS_DIR/install-paru.sh"
 install_config="$SCRIPTS_DIR/install-config.sh"
+install_bm="$SCRIPTS_DIR/install-bm.sh"
 update_pacman="$SCRIPTS_DIR/update-pacman.sh"
 update_paru="$SCRIPTS_DIR/update-paru.sh"
-update_binary="$SCRIPTS_DIR/update-binary.sh"
+update_binary="bm sync --config $SCRIPTS_DIR/../packages/binary.yaml"
 
 $log info "========================================================="
 $log info "Arch Linux Dotfiles Installer"
@@ -56,6 +57,14 @@ $log info "========================================================="
 echo
 
 $update_paru
+
+echo
+$log info "========================================================="
+$log info "Installing binary manager (bm)..."
+$log info "========================================================="
+echo
+
+$install_bm
 
 echo
 $log info "========================================================="

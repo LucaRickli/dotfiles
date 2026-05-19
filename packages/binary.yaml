@@ -1,0 +1,135 @@
+releases:
+  - id: bm
+    src: https://github.com/LucaRickli/bm/releases/download/0.1.0/bm-linux-amd64
+    dst: /usr/local/bin
+    regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
+    assets:
+      - src: bm-linux-amd64
+        dst: bm
+    integrity:
+      signature: https://github.com/LucaRickli/bm/releases/download/0.1.0/bm-linux-amd64.sha256
+      algorithm: sha256
+
+  - id: kubelogin
+    src: https://github.com/int128/kubelogin/releases/download/v1.36.1/kubelogin_linux_amd64.zip
+    dst: /usr/local/bin
+    regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
+    unpack: zip
+    assets:
+      - src: kubelogin
+        dst: kubectl-oidc_login
+    integrity:
+      signature: https://github.com/int128/kubelogin/releases/download/v{{.Version}}/kubelogin_linux_amd64.zip.sha256
+      algorithm: sha256
+
+  - id: talosctl
+    src: https://github.com/siderolabs/talos/releases/download/v1.13.0/talosctl-linux-amd64
+    dst: /usr/local/bin
+    regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
+    assets:
+      - src: talosctl-linux-amd64
+        dst: talosctl
+    integrity:
+      bundle: https://github.com/siderolabs/talos/releases/download/v{{.Version}}/talosctl-linux-amd64.bundle
+      algorithm: bundle
+
+  - id: kubectl
+    src: https://dl.k8s.io/release/v1.35.4/bin/linux/amd64/kubectl
+    dst: /usr/local/bin
+    regex: https:\/\/dl\.k8s\.io\/release\/v(?<Version>[^\/]+)\/bin\/linux\/amd64\/kubectl
+    assets:
+      - src: kubectl
+        dst: kubectl
+    integrity:
+      key: https://dl.k8s.io/release/v{{.Version}}/bin/linux/amd64/kubectl.cert
+      signature: https://dl.k8s.io/release/v{{.Version}}/bin/linux/amd64/kubectl.sig
+      algorithm: cosign
+
+  - id: go-containerregistry
+    src: https://github.com/google/go-containerregistry/releases/download/v0.21.5/go-containerregistry_Linux_x86_64.tar.gz
+    dst: /usr/local/bin
+    unpack: tar.gz
+    regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
+    assets:
+      - src: crane
+        dst: crane
+      - src: gcrane
+        dst: gcrane
+      - src: krane
+        dst: krane
+    integrity:
+      signature: https://github.com/google/go-containerregistry/releases/download/v{{.Version}}/checksums.txt
+      algorithm: sha256
+
+  - id: helm
+    src: https://get.helm.sh/helm-v4.1.4-linux-amd64.tar.gz
+    dst: /usr/local/bin
+    unpack: tar.gz
+    regex: https:\/\/get\.helm\.sh\/helm-v(?<Version>[^-]+)-linux-amd64\.tar\.gz
+    assets:
+      - src: linux-amd64/helm
+        dst: helm
+    integrity:
+      key: https://keys.openpgp.org/vks/v1/by-fingerprint/BF888333D96A1C18E2682AAED79D67C9EC016739
+      signature: https://github.com/helm/helm/releases/download/v{{.Version}}/helm-v{{.Version}}-linux-amd64.tar.gz.asc
+      algorithm: pgp
+
+  - id: certinfo
+    src: https://github.com/pete911/certinfo/releases/download/v1.0.40/certinfo_{{.Version}}_linux_amd64.tar.gz
+    dst: /usr/local/bin
+    unpack: tar.gz
+    regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
+    assets:
+      - src: certinfo
+        dst: certinfo
+    integrity:
+      signature: https://github.com/pete911/certinfo/releases/download/v{{.Version}}/checksums.txt
+      algorithm: sha256
+
+  - id: flux
+    src: https://github.com/fluxcd/flux2/releases/download/v2.8.6/flux_{{.Version}}_linux_amd64.tar.gz
+    dst: /usr/local/bin
+    unpack: tar.gz
+    regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
+    assets:
+      - src: flux
+        dst: flux
+    integrity:
+      signature: https://github.com/fluxcd/flux2/releases/download/v{{.Version}}/flux_{{.Version}}_checksums.txt
+      algorithm: sha256
+
+  - id: helmfile
+    src: https://github.com/helmfile/helmfile/releases/download/v1.5.1/helmfile_{{.Version}}_linux_amd64.tar.gz
+    dst: /usr/local/bin
+    unpack: tar.gz
+    regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
+    assets:
+      - src: helmfile
+        dst: helmfile
+    integrity:
+      signature: https://github.com/helmfile/helmfile/releases/download/v{{.Version}}/helmfile_{{.Version}}_checksums.txt
+      algorithm: sha256
+
+  - id: kubectl-radar
+    src: https://github.com/skyhook-io/radar/releases/download/v1.5.14/radar_v{{.Version}}_linux_amd64.tar.gz
+    dst: /usr/local/bin
+    unpack: tar.gz
+    regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
+    assets:
+      - src: kubectl-radar
+        dst: kubectl-radar
+    integrity:
+      signature: https://github.com/skyhook-io/radar/releases/download/v{{.Version}}/checksums.txt
+      algorithm: sha256
+
+  - id: trivy
+    src: https://github.com/aquasecurity/trivy/releases/download/v0.70.0/trivy_{{.Version}}_Linux-64bit.tar.gz
+    dst: /usr/local/bin
+    unpack: tar.gz
+    regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
+    assets:
+      - src: trivy
+        dst: trivy
+    integrity:
+      signature: https://github.com/aquasecurity/trivy/releases/download/v{{.Version}}/trivy_{{.Version}}_checksums.txt
+      algorithm: sha256

@@ -1,3 +1,4 @@
 # This file contains fish universal variable definitions.
 # VERSION: 3.0
+SETUVAR --export BM_SYNC_CONFIG:/home/luca/dotfiles/packages/binary\x2eyaml
 SETUVAR __fish_initialized:4300

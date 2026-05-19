@@ -1,3 +1,0 @@
-src: https://github.com/helmfile/helmfile/releases/download/v1.5.1/helmfile_1.5.1_linux_amd64.tar.gz
-dst: /usr/local/bin/helmfile
-process: "mkdir -p $tmpdir/unpacked && tar -xvzf $tmpfile -C $tmpdir/unpacked/ && mv $tmpdir/unpacked/helmfile $tmpfile"

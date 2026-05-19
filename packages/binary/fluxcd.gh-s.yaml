@@ -1,3 +1,0 @@
-src: https://github.com/fluxcd/flux2/releases/download/v2.8.6/flux_2.8.6_linux_amd64.tar.gz
-dst: /usr/local/bin/flux
-process: "mkdir -p $tmpdir/unpacked && tar -xvzf $tmpfile -C $tmpdir/unpacked/ && mv $tmpdir/unpacked/flux $tmpfile"

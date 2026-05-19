@@ -1,2 +1,0 @@
-src: https://dl.k8s.io/release/v1.36.0/bin/linux/amd64/kubectl
-dst: /usr/local/bin/kubectl

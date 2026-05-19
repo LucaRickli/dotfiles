@@ -1,3 +1,0 @@
-src: https://get.helm.sh/helm-v4.1.4-linux-amd64.tar.gz
-dst: /usr/local/bin/helm
-process: "mkdir -p $tmpdir/unpacked && tar -xvzf $tmpfile -C $tmpdir/unpacked --strip-components=1 && mv $tmpdir/unpacked/helm $tmpfile"
