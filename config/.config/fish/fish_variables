@@ -1,4 +1,6 @@
 # This file contains fish universal variable definitions.
 # VERSION: 3.0
 SETUVAR --export BM_SYNC_CONFIG:/home/luca/dotfiles/packages/binary\x2eyaml
+SETUVAR --export SOPS_AGE_KEY_FILE:/home/luca/\x2econfig/sops/age/keys\x2etxt
+SETUVAR --export EDITOR:code --wait
 SETUVAR __fish_initialized:4300

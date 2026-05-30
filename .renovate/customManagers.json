@@ -3,44 +3,19 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "GitHub releases with duplicated version (no v-prefix) in asset name",
-      "fileMatch": ["\\.gh-s\\.ya?ml$"],
+      "description": "GitHub releases",
+      "fileMatch": ["packages/binary\\.yaml"],
       "matchStrings": [
-        // https://github.com/pete911/certinfo/releases/download/v1.0.40/certinfo_1.0.40_linux_amd64.tar.gz
-        "https:\\/\\/github.com\\/(?<depName>[^\\/]+\\/[^\\/]+)\\/releases\\/download\\/v?(?<currentValue>[^\\/]+)\\/(?<assetName>[^_]+)_(?<currentValue2>[0-9]+\\.[0-9]+\\.[0-9]+)_(?<suffix>[^\\s\"']+)"
-      ],
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver",
-      "autoReplaceStringTemplate": "https://github.com/{{{depName}}}/releases/download/v{{{newValue}}}/{{{assetName}}}_{{{newValue}}}_{{{suffix}}}"
-    },
-    {
-      "customType": "regex",
-      "description": "GitHub releases with duplicated version (with v-prefix) in asset name",
-      "fileMatch": ["\\.gh-s\\.ya?ml$"],
-      "matchStrings": [
-        // https://github.com/helmfile/helmfile/releases/download/v1.5.1/helmfile_v1.5.1_linux_amd64.tar.gz
-        "https:\\/\\/github.com\\/(?<depName>[^\\/]+\\/[^\\/]+)\\/releases\\/download\\/v?(?<currentValue>[^\\/]+)\\/(?<assetName>[^_]+)_v(?<currentValue2>[0-9]+\\.[0-9]+\\.[0-9]+)_(?<suffix>[^\\s\"']+)"
-      ],
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver",
-      "autoReplaceStringTemplate": "https://github.com/{{{depName}}}/releases/download/v{{{newValue}}}/{{{assetName}}}_v{{{newValue}}}_{{{suffix}}}"
-    },
-    {
-      "customType": "regex",
-      "description": "Normal GitHub release assets",
-      "fileMatch": ["\\.gh\\.ya?ml$"],
-      "matchStrings": [
-        // https://github.com/google/go-containerregistry/releases/download/v0.21.5/go-containerregistry_Linux_x86_64.tar.gz
+        // https://github.com/<owner>/<repo>/releases/download/<version>/<asset>
         "https:\\/\\/github.com\\/(?<depName>\\S+?\\/\\S+?)\\/releases\\/download\\/(?<currentValue>(v|\\d)\\S+?)\\/\\S+"
-      ],
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver"
+      ]
     },
     {
       "customType": "regex",
       "description": "Helm CDN",
-      "fileMatch": ["packages/binary/helm\\.yaml"],
+      "fileMatch": ["packages/binary\\.yaml"],
       "matchStrings": [
+        // https://get.helm.sh/helm-v<version>-linux-amd64.tar.gz
         "https:\\/\\/get\\.helm\\.sh\\/helm-v(?<currentValue>[^-]+)-linux-amd64\\.tar\\.gz"
       ],
       "depNameTemplate": "helm/helm",
@@ -51,8 +26,9 @@
     {
       "customType": "regex",
       "description": "kubectl CDN",
-      "fileMatch": ["packages/binary/kubectl\\.yaml"],
+      "fileMatch": ["packages/binary\\.yaml"],
       "matchStrings": [
+        // https://dl.k8s.io/release/v<version>/bin/linux/amd64/kubectl
         "https:\\/\\/dl\\.k8s\\.io\\/release\\/v(?<currentValue>[^\\/]+)\\/bin\\/linux\\/amd64\\/kubectl"
       ],
       "depNameTemplate": "kubernetes/kubernetes",

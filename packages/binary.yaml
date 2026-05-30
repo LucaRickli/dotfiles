@@ -133,3 +133,42 @@ releases:
     integrity:
       signature: https://github.com/aquasecurity/trivy/releases/download/v{{.Version}}/trivy_{{.Version}}_checksums.txt
       algorithm: sha256
+
+  - id: sops
+    src: https://github.com/getsops/sops/releases/download/v3.13.1/sops-v{{.Version}}.linux.amd64
+    dst: /usr/local/bin
+    regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
+    assets:
+      - src: sops-v{{.Version}}.linux.amd64
+        dst: sops
+    integrity:
+      signature: https://github.com/getsops/sops/releases/download/v{{.Version}}/sops-v{{.Version}}.checksums.txt
+      algorithm: sha256
+
+  - id: age
+    src: https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-amd64.tar.gz
+    dst: /usr/local/bin
+    unpack: tar.gz
+    regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
+    assets:
+      - src: age/age
+        dst: age
+      - src: age/age-keygen
+        dst: age-keygen
+      - src: age/age-inspect
+        dst: age-inspect
+      - src: age/age-plugin-batchpass
+        dst: age-plugin-batchpass
+    #integrity: # TODO (proof file)
+
+  - id: talhelper
+    src: https://github.com/budimanjojo/talhelper/releases/download/v3.1.10/talhelper_linux_amd64.tar.gz
+    dst: /usr/local/bin
+    unpack: tar.gz
+    regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
+    assets:
+      - src: talhelper
+        dst: talhelper
+    integrity:
+      signature: https://github.com/budimanjojo/talhelper/releases/download/v{{.Version}}/checksums.txt
+      algorithm: sha256
