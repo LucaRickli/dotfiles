@@ -31,3 +31,6 @@ fastfetch
 
 # Dev tools
 bind
+
+# Security
+dae
