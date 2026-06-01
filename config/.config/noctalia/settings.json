@@ -172,6 +172,9 @@
             ],
             "right": [
                 {
+                    "id": "plugin:clipper"
+                },
+                {
                     "defaultSettings": {
                         "precision": 8,
                         "showBarValue": true
@@ -242,9 +245,6 @@
                     "icon": "noctalia",
                     "id": "ControlCenter",
                     "useDistroLogo": false
-                },
-                {
-                    "id": "plugin:clipper"
                 }
             ]
         }
