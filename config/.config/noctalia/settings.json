@@ -48,7 +48,7 @@
         "capsuleOpacity": 1,
         "contentPadding": 2,
         "density": "default",
-        "displayMode": "auto_hide",
+        "displayMode": "always_visible",
         "enableExclusionZoneInset": true,
         "fontScale": 1,
         "frameRadius": 12,
