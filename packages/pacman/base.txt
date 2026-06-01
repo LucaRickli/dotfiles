@@ -17,6 +17,7 @@ xdg-desktop-portal-gnome
 xdg-desktop-portal-gtk
 matugen
 qt6-multimedia-ffmpeg
+cliphist
 
 # Gnome (fallback / rdp window manager)
 gnome-control-center
