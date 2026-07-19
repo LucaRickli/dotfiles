@@ -4,3 +4,4 @@ pipewire-audio
 pipewire-jack
 pipewire-pulse
 wireplumber
+playerctl
