@@ -381,8 +381,8 @@ binds {
     // Applications
     // ---------------------------------------------------------
     Mod+E hotkey-overlay-title="Run File Manager" { spawn "nautilus"; }
-    Mod+T hotkey-overlay-title="Run ghostty" { spawn "ghostty"; }
-    Mod+D hotkey-overlay-title="Run fuzzel" { spawn "fuzzel"; }
+    Mod+T hotkey-overlay-title="Run Terminal" { spawn "ghostty"; }
+    Mod+W hotkey-overlay-title="Run Web Browser" { spawn "firefox"; }
     
     // ---------------------------------------------------------
     // Audio & Brightness
@@ -555,7 +555,7 @@ binds {
     // Toggle tabbed column display mode.
     // Windows in this column will appear as vertical tabs,
     // rather than stacked on top of each other.
-    Mod+W { toggle-column-tabbed-display; }
+    // Mod+W { toggle-column-tabbed-display; }
 
     // Actions to switch layouts.
     // Note: if you uncomment these, make sure you do NOT have
