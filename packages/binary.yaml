@@ -11,7 +11,7 @@ releases:
       algorithm: sha256
 
   - id: kubelogin
-    src: https://github.com/int128/kubelogin/releases/download/v1.36.1/kubelogin_linux_amd64.zip
+    src: https://github.com/int128/kubelogin/releases/download/v1.36.3/kubelogin_linux_amd64.zip
     dst: /usr/local/bin
     regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
     unpack: zip
