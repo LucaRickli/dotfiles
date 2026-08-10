@@ -1,6 +1,6 @@
 {
     "appLauncher": {
-        "autoPasteClipboard": false,
+        "autoPasteClipboard": true,
         "clipboardWatchImageCommand": "wl-paste --type image --watch cliphist store",
         "clipboardWatchTextCommand": "wl-paste --type text --watch cliphist store",
         "clipboardWrapText": true,
@@ -30,9 +30,9 @@
     "audio": {
         "mprisBlacklist": [
         ],
-        "preferredPlayer": "",
+        "preferredPlayer": "spotify",
         "spectrumFrameRate": 30,
-        "spectrumMirrored": true,
+        "spectrumMirrored": false,
         "visualizerType": "linear",
         "volumeFeedback": false,
         "volumeFeedbackSoundFile": "",
@@ -47,10 +47,10 @@
         "capsuleColorKey": "none",
         "capsuleOpacity": 1,
         "contentPadding": 2,
-        "density": "default",
+        "density": "mini",
         "displayMode": "always_visible",
         "enableExclusionZoneInset": true,
-        "fontScale": 1,
+        "fontScale": 0.9,
         "frameRadius": 12,
         "frameThickness": 8,
         "hideOnOverview": false,
@@ -112,8 +112,15 @@
                     "useDistroLogo": false
                 },
                 {
+                    "defaultSettings": {
+                        "precision": 8,
+                        "showBarValue": true
+                    },
+                    "id": "plugin:noctalia-calculator"
+                },
+                {
                     "clockColor": "none",
-                    "customFont": "",
+                    "customFont": "Sans Serif",
                     "formatHorizontal": "HH:mm ddd, MMM dd",
                     "formatVertical": "HH mm - dd MM",
                     "id": "Clock",
@@ -125,8 +132,8 @@
                     "diskPath": "/",
                     "iconColor": "none",
                     "id": "SystemMonitor",
-                    "showCpuCores": false,
-                    "showCpuFreq": false,
+                    "showCpuCores": true,
+                    "showCpuFreq": true,
                     "showCpuTemp": true,
                     "showCpuUsage": true,
                     "showDiskAvailable": false,
@@ -136,8 +143,8 @@
                     "showLoadAverage": false,
                     "showMemoryAsPercent": false,
                     "showMemoryUsage": true,
-                    "showNetworkStats": false,
-                    "showSwapUsage": false,
+                    "showNetworkStats": true,
+                    "showSwapUsage": true,
                     "textColor": "none",
                     "useMonospaceFont": true,
                     "usePadding": false
@@ -154,7 +161,7 @@
                     "useFixedWidth": false
                 },
                 {
-                    "compactMode": false,
+                    "compactMode": true,
                     "hideMode": "hidden",
                     "hideWhenIdle": false,
                     "id": "MediaMini",
@@ -164,7 +171,7 @@
                     "showAlbumArt": true,
                     "showArtistFirst": true,
                     "showProgressRing": true,
-                    "showVisualizer": false,
+                    "showVisualizer": true,
                     "textColor": "none",
                     "useFixedWidth": false,
                     "visualizerType": "linear"
@@ -172,38 +179,42 @@
             ],
             "right": [
                 {
-                    "id": "plugin:clipper"
-                },
-                {
-                    "defaultSettings": {
-                        "precision": 8,
-                        "showBarValue": true
-                    },
-                    "id": "plugin:noctalia-calculator"
-                },
-                {
-                    "defaultSettings": {
-                        "activeColor": "primary",
-                        "camFilterRegex": "",
-                        "enableToast": true,
-                        "hideInactive": false,
-                        "iconSpacing": 4,
-                        "inactiveColor": "none",
-                        "micFilterRegex": "",
-                        "removeMargins": false
-                    },
-                    "id": "plugin:privacy-indicator"
-                },
-                {
                     "blacklist": [
+                        "Remmina",
+                        "remmina-icon"
                     ],
                     "chevronColor": "none",
                     "colorizeIcons": false,
                     "drawerEnabled": true,
-                    "hidePassive": false,
+                    "hidePassive": true,
                     "id": "Tray",
                     "pinned": [
                     ]
+                },
+                {
+                    "defaultSettings": {
+                        "autoPaste": false,
+                        "autoPasteDelay": 300,
+                        "autoPasteOnRightClick": false,
+                        "cardColors": {
+                        },
+                        "customColors": {
+                        },
+                        "enableTodoIntegration": false,
+                        "fullscreenMode": false,
+                        "hidePanelBackground": false,
+                        "notecardsEnabled": true,
+                        "panelHeight": 0,
+                        "panelWidth": 1450,
+                        "pincardsEnabled": true,
+                        "showCloseButton": true
+                    },
+                    "id": "plugin:clipper"
+                },
+                {
+                    "iconColor": "none",
+                    "id": "KeepAwake",
+                    "textColor": "none"
                 },
                 {
                     "hideWhenZero": false,
@@ -437,7 +448,7 @@
         "passwordChars": false,
         "radiusRatio": 1,
         "reverseScroll": false,
-        "scaleRatio": 1,
+        "scaleRatio": 0.9,
         "screenRadiusRatio": 1,
         "shadowDirection": "bottom_right",
         "shadowOffsetX": 2,
@@ -445,7 +456,7 @@
         "showChangelogOnStartup": true,
         "showHibernateOnLockScreen": false,
         "showScreenCorners": false,
-        "showSessionButtonsOnLockScreen": true,
+        "showSessionButtonsOnLockScreen": false,
         "smoothScrollEnabled": true,
         "telemetryEnabled": false
     },
@@ -463,17 +474,17 @@
     },
     "idle": {
         "customCommands": "[]",
-        "enabled": false,
-        "fadeDuration": 5,
+        "enabled": true,
+        "fadeDuration": 10,
         "lockCommand": "",
-        "lockTimeout": 660,
+        "lockTimeout": 300,
         "resumeLockCommand": "",
         "resumeScreenOffCommand": "",
         "resumeSuspendCommand": "",
         "screenOffCommand": "",
-        "screenOffTimeout": 600,
+        "screenOffTimeout": 240,
         "suspendCommand": "",
-        "suspendTimeout": 1800
+        "suspendTimeout": 360
     },
     "location": {
         "analogClockInCalendar": false,
@@ -481,7 +492,7 @@
         "firstDayOfWeek": -1,
         "hideWeatherCityName": false,
         "hideWeatherTimezone": false,
-        "name": "",
+        "name": "Küsnacht",
         "showCalendarEvents": true,
         "showCalendarWeather": true,
         "showWeekNumberInCalendar": false,
@@ -498,7 +509,7 @@
         "bluetoothRssiPollIntervalMs": 60000,
         "bluetoothRssiPollingEnabled": false,
         "disableDiscoverability": false,
-        "networkPanelView": "wifi",
+        "networkPanelView": "ethernet",
         "wifiDetailsViewMode": "list"
     },
     "nightLight": {
@@ -642,7 +653,7 @@
         "diskAvailWarningThreshold": 20,
         "diskCriticalThreshold": 90,
         "diskWarningThreshold": 80,
-        "enableDgpuMonitoring": false,
+        "enableDgpuMonitoring": true,
         "externalMonitor": "resources || missioncenter || jdsystemmonitor || corestats || system-monitoring-center || gnome-system-monitor || plasma-systemmonitor || mate-system-monitor || ukui-system-monitor || deepin-system-monitor || pantheon-system-monitor",
         "gpuCriticalThreshold": 90,
         "gpuWarningThreshold": 80,
@@ -659,7 +670,7 @@
         "activeTemplates": [
             {
                 "enabled": true,
-                "id": "spicetify"
+                "id": "niri"
             },
             {
                 "enabled": true,
@@ -668,10 +679,6 @@
             {
                 "enabled": true,
                 "id": "pywalfox"
-            },
-            {
-                "enabled": true,
-                "id": "niri"
             }
         ],
         "enableUserTheming": false
@@ -721,7 +728,7 @@
         "useOriginalImages": false,
         "useSolidColor": false,
         "useWallhaven": false,
-        "viewMode": "single",
+        "viewMode": "browse",
         "wallhavenApiKey": "",
         "wallhavenCategories": "111",
         "wallhavenOrder": "desc",

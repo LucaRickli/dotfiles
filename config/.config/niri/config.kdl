@@ -357,6 +357,13 @@ window-rule {
     }
 }
 
+// You can set environment variables here, which will be inherited by all
+// processes spawned by niri. This includes the shell, and any programs
+// started from it.
+environment {
+    GTK_THEME "Adwaita:dark"
+}
+
 binds {
     // Keys consist of modifiers separated by + signs, followed by an XKB key name
     // in the end. To find an XKB name for a particular key, you may use a program
@@ -379,6 +386,7 @@ binds {
     Mod+S hotkey-overlay-title="Toggle System Monitor" { spawn-sh "qs -c noctalia-shell ipc call systemMonitor toggle"; }
     Mod+D hotkey-overlay-title="Toggle Calendar" { spawn-sh "qs -c noctalia-shell ipc call calendar toggle"; }
     Mod+V hotkey-overlay-title="Toggle Clipper" { spawn-sh "qs -c noctalia-shell ipc call plugin:clipper toggle"; }
+    Mod+P hotkey-overlay-title="Toggle Music Player" { spawn-sh "qs -c noctalia-shell ipc call media toggle"; }
     Alt+F4 hotkey-overlay-title="Open Session Menu" { spawn-sh "qs -c noctalia-shell ipc call sessionMenu toggle"; }
     Super+Alt+L hotkey-overlay-title="Lock the Screen" { spawn-sh "qs -c noctalia-shell ipc call lockScreen lock"; }
 
