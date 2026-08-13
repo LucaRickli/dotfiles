@@ -62,7 +62,7 @@ releases:
       algorithm: sha256
 
   - id: helm
-    src: https://get.helm.sh/helm-v4.1.4-linux-amd64.tar.gz
+    src: https://get.helm.sh/helm-v4.2.4-linux-amd64.tar.gz
     dst: /usr/local/bin
     unpack: tar.gz
     regex: https:\/\/get\.helm\.sh\/helm-v(?<Version>[^-]+)-linux-amd64\.tar\.gz
