@@ -123,7 +123,7 @@ releases:
       algorithm: sha256
 
   - id: trivy
-    src: https://github.com/aquasecurity/trivy/releases/download/v0.70.0/trivy_{{.Version}}_Linux-64bit.tar.gz
+    src: https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_{{.Version}}_Linux-64bit.tar.gz
     dst: /usr/local/bin
     unpack: tar.gz
     regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
