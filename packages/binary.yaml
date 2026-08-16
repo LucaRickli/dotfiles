@@ -99,7 +99,7 @@ releases:
       algorithm: sha256
 
   - id: helmfile
-    src: https://github.com/helmfile/helmfile/releases/download/v1.5.1/helmfile_{{.Version}}_linux_amd64.tar.gz
+    src: https://github.com/helmfile/helmfile/releases/download/v1.7.4/helmfile_{{.Version}}_linux_amd64.tar.gz
     dst: /usr/local/bin
     unpack: tar.gz
     regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
