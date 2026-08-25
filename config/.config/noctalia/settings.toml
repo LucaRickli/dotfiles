@@ -1,7 +1,7 @@
 config_version = 13
 
 [bar.default]
-center = ["workspaces"]
+center = [ "workspaces" ]
 end = [
     "tray",
     "media",
@@ -14,12 +14,12 @@ end = [
     "caffeine",
     "clipboard",
     "control-center",
-    "session",
+    "session"
 ]
 margin_ends = 0
 radius = 0
 scale = 0.80000000447034836
-start = ["launcher", "wallpaper", "clock", "cpu", "ram", "privacy"]
+start = [ "launcher", "wallpaper", "clock", "cpu", "ram", "privacy" ]
 thickness = 24
 
 [control_center]
@@ -40,23 +40,23 @@ smart_auto_hide = true
 enabled = true
 
 [idle]
-behavior_order = ["lock", "screen-off", "lock-and-suspend"]
+behavior_order = [ "lock", "screen-off", "lock-and-suspend" ]
 pre_action_fade_seconds = 10
 
-[idle.behavior.lock]
-action = "lock"
-enabled = true
-timeout = 300.0
+    [idle.behavior.lock]
+    action = "lock"
+    enabled = true
+    timeout = 300.0
 
-[idle.behavior.lock-and-suspend]
-action = "lock_and_suspend"
-enabled = false
-timeout = 900.0
+    [idle.behavior.lock-and-suspend]
+    action = "lock_and_suspend"
+    enabled = false
+    timeout = 900.0
 
-[idle.behavior.screen-off]
-action = "screen_off"
-enabled = false
-timeout = 660.0
+    [idle.behavior.screen-off]
+    action = "screen_off"
+    enabled = false
+    timeout = 660.0
 
 [lockscreen]
 blur_intensity = 0.0
@@ -65,84 +65,81 @@ tint_intensity = 0.0
 [lockscreen_widgets]
 enabled = true
 schema_version = 2
-widget_order = [
-    "lockscreen-login-box@DP-3",
-    "lockscreen-widget-0000000000000001",
-]
+widget_order = [ "lockscreen-login-box@DP-3", "lockscreen-widget-0000000000000001" ]
 
-[lockscreen_widgets.grid]
-cell_size = 16
-major_interval = 4
-visible = true
+    [lockscreen_widgets.grid]
+    cell_size = 16
+    major_interval = 4
+    visible = true
 
-[lockscreen_widgets.widget."lockscreen-login-box@DP-3"]
-box_height = 196.0
-box_width = 810.0
-cx = 1920.0
-cy = 898.0
-output = "DP-3"
-placement_height = 1080.0
-placement_width = 3840.0
-rotation = 0.0
-type = "login_box"
+    [lockscreen_widgets.widget."lockscreen-login-box@DP-3"]
+    box_height = 196.0
+    box_width = 810.0
+    cx = 1920.0
+    cy = 898.0
+    output = "DP-3"
+    placement_height = 1080.0
+    placement_width = 3840.0
+    rotation = 0.0
+    type = "login_box"
 
-[lockscreen_widgets.widget."lockscreen-login-box@DP-3".settings]
-background_color = "surface_variant"
-background_opacity = 0.88
-background_radius = 12.0
-center_password_text = false
-input_opacity = 1.0
-input_radius = 6.0
-layout = "regular"
-show_caps_lock = true
-show_keyboard_layout = true
-show_login_button = true
-show_media = true
-show_session_buttons = true
-show_unlock_hint = true
-show_weather = true
+        [lockscreen_widgets.widget."lockscreen-login-box@DP-3".settings]
+        background_color = "surface_variant"
+        background_opacity = 0.88
+        background_radius = 12.0
+        center_password_text = false
+        input_opacity = 1.0
+        input_radius = 6.0
+        layout = "regular"
+        show_caps_lock = true
+        show_keyboard_layout = true
+        show_login_button = true
+        show_media = true
+        show_session_buttons = true
+        show_unlock_hint = true
+        show_weather = true
 
-[lockscreen_widgets.widget.lockscreen-widget-0000000000000001]
-box_height = 0.0
-box_width = 0.0
-cx = 1920.0
-cy = 187.0
-output = "DP-3"
-placement_height = 1080.0
-placement_width = 3840.0
-rotation = 0.0
-type = "clock"
+    [lockscreen_widgets.widget.lockscreen-widget-0000000000000001]
+    box_height = 0.0
+    box_width = 0.0
+    cx = 1920.0
+    cy = 187.0
+    output = "DP-3"
+    placement_height = 1080.0
+    placement_width = 3840.0
+    rotation = 0.0
+    type = "clock"
 
-[lockscreen_widgets.widget.lockscreen-widget-0000000000000001.settings]
-background = false
-clock_style = "digital"
+        [lockscreen_widgets.widget.lockscreen-widget-0000000000000001.settings]
+        background = false
+        clock_style = "digital"
 
 [shell]
 app_icon_color = "on_surface"
 app_icon_colorize = true
 screen_time_enabled = true
 
-[shell.panel]
-control_center_placement = "floating"
-control_center_position = "center"
+    [shell.panel]
+    control_center_placement = "floating"
+    control_center_position = "center"
 
 [theme]
 community_palette = "GitHub Dark"
 pure_black_dark = true
 source = "community"
 
-[theme.templates]
-builtin_ids = ["gtk3", "gtk4", "ghostty", "kcolorscheme", "niri", "qt"]
-community_ids = ["pywalfox", "discord", "prismlauncher"]
+    [theme.templates]
+    builtin_ids = [ "gtk3", "gtk4", "ghostty", "kcolorscheme", "niri", "qt" ]
+    community_ids = [ "pywalfox", "discord", "prismlauncher" ]
 
 [wallpaper]
 directory = "/home/luca/Pictures/Wallpapers"
 
-[wallpaper.default]
-path = "/home/luca/Pictures/Wallpapers/pillars-of-creation-jwt.png"
+    [wallpaper.default]
+    path = "/home/luca/Pictures/Wallpapers/pillars-of-creation-jwt.png"
 
-[wallpaper.last]
-path = "/home/luca/Pictures/Wallpapers/pillars-of-creation-jwt.png"
+    [wallpaper.last]
+    path = "/home/luca/Pictures/Wallpapers/pillars-of-creation-jwt.png"
 
 [widget.clock]
 format = "{:%H:%M} {:%a} {:%d.%m.%y}"
@@ -160,3 +157,10 @@ visualization = "graph"
 
 [widget.wallpaper]
 enabled = false
+
+[widget.workspaces]
+empty_color = "on_surface"
+focused_output_only = true
+occupied_color = "on_surface"
+show_all_outputs = true
+style = "minimal"
