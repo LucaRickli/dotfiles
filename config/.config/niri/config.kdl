@@ -271,7 +271,7 @@ layout {
 // See the binds section below for more spawn examples.
 
 // This line starts waybar, a commonly used bar for Wayland compositors.
-spawn-at-startup "qs" "-c" "noctalia-shell"
+spawn-at-startup "noctalia"
 
 // To run a shell command (with variables, pipes, etc.), use spawn-sh-at-startup:
 // spawn-sh-at-startup "qs -c ~/source/qs/MyAwesomeShell"
@@ -381,14 +381,14 @@ binds {
     // ---------------------------------------------------------
     // Noctalia
     // ---------------------------------------------------------
-    Mod+Space hotkey-overlay-title="Toggle Launcher" { spawn-sh "qs -c noctalia-shell ipc call launcher toggle"; }
-    Mod+A hotkey-overlay-title="Toggle Control Center" { spawn-sh "qs -c noctalia-shell ipc call controlCenter toggle"; }
-    Mod+S hotkey-overlay-title="Toggle System Monitor" { spawn-sh "qs -c noctalia-shell ipc call systemMonitor toggle"; }
-    Mod+D hotkey-overlay-title="Toggle Calendar" { spawn-sh "qs -c noctalia-shell ipc call calendar toggle"; }
-    Mod+V hotkey-overlay-title="Toggle Clipper" { spawn-sh "qs -c noctalia-shell ipc call plugin:clipper toggle"; }
-    Mod+P hotkey-overlay-title="Toggle Music Player" { spawn-sh "qs -c noctalia-shell ipc call media toggle"; }
-    Alt+F4 hotkey-overlay-title="Open Session Menu" { spawn-sh "qs -c noctalia-shell ipc call sessionMenu toggle"; }
-    Super+Alt+L hotkey-overlay-title="Lock the Screen" { spawn-sh "qs -c noctalia-shell ipc call lockScreen lock"; }
+    Mod+Space hotkey-overlay-title="Toggle Launcher" { spawn "noctalia" "msg" "panel-toggle" "launcher"; }
+    Mod+A hotkey-overlay-title="Toggle Control Center" { spawn "noctalia" "msg" "panel-toggle" "control-center"; }
+    Mod+S hotkey-overlay-title="Toggle System Monitor" { spawn "noctalia" "msg" "panel-toggle" "control-center" "system"; }
+    Mod+D hotkey-overlay-title="Toggle Calendar" { spawn "noctalia" "msg" "panel-toggle" "control-center" "calendar"; }
+    Mod+V hotkey-overlay-title="Toggle Clipper" { spawn "noctalia" "msg" "panel-toggle" "clipboard"; }
+    Mod+P hotkey-overlay-title="Toggle Music Player" { spawn "noctalia" "msg" "panel-toggle" "control-center" "media"; }
+    Alt+F4 hotkey-overlay-title="Open Session Menu" { spawn "noctalia" "msg" "panel-toggle" "session"; }
+    Super+Alt+L hotkey-overlay-title="Lock the Screen" { spawn "noctalia" "msg" "session" "lock"; }
 
     // ---------------------------------------------------------
     // Applications
@@ -400,11 +400,11 @@ binds {
     // ---------------------------------------------------------
     // Audio & Brightness
     // ---------------------------------------------------------
-    XF86AudioRaiseVolume { spawn "qs" "-c" "noctalia-shell" "ipc" "call" "volume" "increase"; }
-    XF86AudioLowerVolume { spawn "qs" "-c" "noctalia-shell" "ipc" "call" "volume" "decrease"; }
-    XF86AudioMute { spawn "qs" "-c" "noctalia-shell" "ipc" "call" "volume" "muteOutput"; }
-    XF86MonBrightnessUp { spawn "qs" "-c" "noctalia-shell" "ipc" "call" "brightness" "increase"; }
-    XF86MonBrightnessDown { spawn "qs" "-c" "noctalia-shell" "ipc" "call" "brightness" "decrease"; }
+    XF86AudioRaiseVolume { spawn "noctalia" "msg" "volume-up"; }
+    XF86AudioLowerVolume { spawn "noctalia" "msg" "volume-down"; }
+    XF86AudioMute { spawn "noctalia" "msg" "volume-mute"; }
+    XF86MonBrightnessUp { spawn "noctalia" "msg" "brightness-up"; }
+    XF86MonBrightnessDown { spawn "noctalia" "msg" "brightness-down"; }
     XF86AudioPlay        allow-when-locked=true { spawn-sh "playerctl play-pause"; }
     XF86AudioStop        allow-when-locked=true { spawn-sh "playerctl stop"; }
     XF86AudioPrev        allow-when-locked=true { spawn-sh "playerctl previous"; }
@@ -601,5 +601,6 @@ binds {
     Mod+Shift+P { power-off-monitors; }
 }
 
-include "./noctalia.kdl"
 
+
+include "noctalia.kdl"
