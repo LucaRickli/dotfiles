@@ -361,7 +361,7 @@ window-rule {
 // processes spawned by niri. This includes the shell, and any programs
 // started from it.
 environment {
-    GTK_THEME "Adwaita:dark"
+    // GTK_THEME "Adwaita:dark"
 }
 
 binds {
