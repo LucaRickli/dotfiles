@@ -46,7 +46,7 @@ releases:
       algorithm: cosign
 
   - id: go-containerregistry
-    src: https://github.com/google/go-containerregistry/releases/download/v0.21.5/go-containerregistry_Linux_x86_64.tar.gz
+    src: https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Linux_x86_64.tar.gz
     dst: /usr/local/bin
     unpack: tar.gz
     regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
