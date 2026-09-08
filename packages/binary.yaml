@@ -34,7 +34,7 @@ releases:
       algorithm: bundle
 
   - id: kubectl
-    src: https://dl.k8s.io/release/v1.35.4/bin/linux/amd64/kubectl
+    src: https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl
     dst: /usr/local/bin
     regex: https:\/\/dl\.k8s\.io\/release\/v(?<Version>[^\/]+)\/bin\/linux\/amd64\/kubectl
     assets:
