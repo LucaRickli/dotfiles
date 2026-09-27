@@ -73,10 +73,10 @@ releases:
     assets:
       - src: linux-amd64/helm
         dst: helm
-    integrity:
-      key: https://raw.githubusercontent.com/helm/helm/main/KEYS
-      signature: https://github.com/helm/helm/releases/download/v{{.Version}}/helm-v{{.Version}}-linux-amd64.tar.gz.asc
-      algorithm: pgp
+    #integrity:
+    #  key: https://raw.githubusercontent.com/helm/helm/main/KEYS
+    #  signature: https://github.com/helm/helm/releases/download/v{{.Version}}/helm-v{{.Version}}-linux-amd64.tar.gz.asc
+    #  algorithm: pgp
 
   - id: certinfo
     src: https://github.com/pete911/certinfo/releases/download/v1.0.40/certinfo_{{.Version}}_linux_amd64.tar.gz
