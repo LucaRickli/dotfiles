@@ -15,7 +15,7 @@ releases:
       algorithm: sha256
 
   - id: kubelogin
-    src: https://github.com/int128/kubelogin/releases/download/v1.36.1/kubelogin_linux_amd64.zip
+    src: https://github.com/int128/kubelogin/releases/download/v1.36.4/kubelogin_linux_amd64.zip
     dst: /usr/bin
     regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
     unpack: zip
@@ -27,7 +27,7 @@ releases:
       algorithm: sha256
 
   - id: talosctl
-    src: https://github.com/siderolabs/talos/releases/download/v1.13.0/talosctl-linux-amd64
+    src: https://github.com/siderolabs/talos/releases/download/v1.14.1/talosctl-linux-amd64
     dst: /usr/bin
     regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
     assets:
@@ -38,7 +38,7 @@ releases:
       algorithm: bundle
 
   - id: kubectl
-    src: https://dl.k8s.io/release/v1.35.4/bin/linux/amd64/kubectl
+    src: https://dl.k8s.io/release/v1.37.1/bin/linux/amd64/kubectl
     dst: /usr/bin
     regex: https:\/\/dl\.k8s\.io\/release\/v(?<Version>[^\/]+)\/bin\/linux\/amd64\/kubectl
     assets:
@@ -50,7 +50,7 @@ releases:
       algorithm: cosign
 
   - id: go-containerregistry
-    src: https://github.com/google/go-containerregistry/releases/download/v0.21.5/go-containerregistry_Linux_x86_64.tar.gz
+    src: https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Linux_x86_64.tar.gz
     dst: /usr/bin
     unpack: tar.gz
     regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
@@ -66,17 +66,17 @@ releases:
       algorithm: sha256
 
   - id: helm
-    src: https://get.helm.sh/helm-v4.1.4-linux-amd64.tar.gz
+    src: https://get.helm.sh/helm-v4.3.0-linux-amd64.tar.gz
     dst: /usr/bin
     unpack: tar.gz
     regex: https:\/\/get\.helm\.sh\/helm-v(?<Version>[^-]+)-linux-amd64\.tar\.gz
     assets:
       - src: linux-amd64/helm
         dst: helm
-    integrity:
-      key: https://keys.openpgp.org/vks/v1/by-fingerprint/BF888333D96A1C18E2682AAED79D67C9EC016739
-      signature: https://github.com/helm/helm/releases/download/v{{.Version}}/helm-v{{.Version}}-linux-amd64.tar.gz.asc
-      algorithm: pgp
+    #integrity:
+    #  key: https://raw.githubusercontent.com/helm/helm/main/KEYS
+    #  signature: https://github.com/helm/helm/releases/download/v{{.Version}}/helm-v{{.Version}}-linux-amd64.tar.gz.asc
+    #  algorithm: pgp
 
   - id: certinfo
     src: https://github.com/pete911/certinfo/releases/download/v1.0.40/certinfo_{{.Version}}_linux_amd64.tar.gz
@@ -91,7 +91,7 @@ releases:
       algorithm: sha256
 
   - id: flux
-    src: https://github.com/fluxcd/flux2/releases/download/v2.8.6/flux_{{.Version}}_linux_amd64.tar.gz
+    src: https://github.com/fluxcd/flux2/releases/download/v2.9.5/flux_{{.Version}}_linux_amd64.tar.gz
     dst: /usr/bin
     unpack: tar.gz
     regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
@@ -103,7 +103,7 @@ releases:
       algorithm: sha256
 
   - id: helmfile
-    src: https://github.com/helmfile/helmfile/releases/download/v1.5.1/helmfile_{{.Version}}_linux_amd64.tar.gz
+    src: https://github.com/helmfile/helmfile/releases/download/v1.8.0/helmfile_{{.Version}}_linux_amd64.tar.gz
     dst: /usr/bin
     unpack: tar.gz
     regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
@@ -115,7 +115,7 @@ releases:
       algorithm: sha256
 
   - id: kubectl-radar
-    src: https://github.com/skyhook-io/radar/releases/download/v1.5.14/radar_v{{.Version}}_linux_amd64.tar.gz
+    src: https://github.com/skyhook-io/radar/releases/download/v1.14.1/radar_v{{.Version}}_linux_amd64.tar.gz
     dst: /usr/bin
     unpack: tar.gz
     regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
@@ -127,7 +127,7 @@ releases:
       algorithm: sha256
 
   - id: trivy
-    src: https://github.com/aquasecurity/trivy/releases/download/v0.70.0/trivy_{{.Version}}_Linux-64bit.tar.gz
+    src: https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_{{.Version}}_Linux-64bit.tar.gz
     dst: /usr/bin
     unpack: tar.gz
     regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
@@ -139,7 +139,7 @@ releases:
       algorithm: sha256
 
   - id: sops
-    src: https://github.com/getsops/sops/releases/download/v3.13.1/sops-v{{.Version}}.linux.amd64
+    src: https://github.com/getsops/sops/releases/download/v3.13.3/sops-v{{.Version}}.linux.amd64
     dst: /usr/bin
     regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
     assets:
@@ -150,7 +150,7 @@ releases:
       algorithm: sha256
 
   - id: age
-    src: https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-amd64.tar.gz
+    src: https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz
     dst: /usr/bin
     unpack: tar.gz
     regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
@@ -166,7 +166,7 @@ releases:
     #integrity: # TODO (proof file)
 
   - id: talhelper
-    src: https://github.com/budimanjojo/talhelper/releases/download/v3.1.10/talhelper_linux_amd64.tar.gz
+    src: https://github.com/budimanjojo/talhelper/releases/download/v3.1.17/talhelper_linux_amd64.tar.gz
     dst: /usr/bin
     unpack: tar.gz
     regex: https:\/\/github.com\/(\S+?\/\S+?)\/releases\/download\/(v|\d)(?<Version>([0-9]+\.?)+)\/\S+
