@@ -74,7 +74,7 @@ releases:
       - src: linux-amd64/helm
         dst: helm
     integrity:
-      key: https://keys.openpgp.org/vks/v1/by-fingerprint/BF888333D96A1C18E2682AAED79D67C9EC016739
+      key: https://raw.githubusercontent.com/helm/helm/main/KEYS
       signature: https://github.com/helm/helm/releases/download/v{{.Version}}/helm-v{{.Version}}-linux-amd64.tar.gz.asc
       algorithm: pgp
 
