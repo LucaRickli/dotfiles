@@ -12,23 +12,19 @@ set -euxo pipefail
 CTX=${CTX:-/ctx}
 NVIDIA_KMOD=${NVIDIA_KMOD:-open}
 pkgs() { grep -hvE '^\s*(#|$)' "$@"; }
-# Terra (overlay/etc/yum.repos.d/terra.repo) serves only noctalia-greeter,
-# which the base image already has. Leaving it out keeps a broken Terra publish
-# (bad repomd signature, say) from failing this build too.
-no_terra=--disablerepo=terra
 
 KVER=$(rpm -q kernel-core --qf '%{VERSION}-%{RELEASE}.%{ARCH}')
 REL=$(rpm -E %fedora)
 
 # --- RPM Fusion free + nonfree ------------------------------------------------
-dnf -y "$no_terra" install \
+dnf -y install \
     "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-${REL}.noarch.rpm" \
     "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${REL}.noarch.rpm"
 
 # --- Kernel headers for exactly the image's kernel ----------------------------
 # fedora-bootc enables updates-archive, so this version stays installable after
 # newer kernels hit the updates repo.
-dnf -y "$no_terra" install "kernel-devel-${KVER}" akmods
+dnf -y install "kernel-devel-${KVER}" akmods
 
 # Left to itself RPM Fusion's nvidia-kmod.spec picks open vs. closed by running
 # lspci at build time (nvidia-kmod-noopen-checks), and that probe sees the BUILD
@@ -53,7 +49,7 @@ chmod 644 /etc/pki/akmods/certs/public_key.der
 install -Dm640 -o root -g akmods /run/secrets/secureboot_key /etc/pki/akmods/private/private_key.priv
 
 # --- Driver ---------------------------------------------------------------------
-dnf -y "$no_terra" install $(pkgs "$CTX"/nvidia/packages.txt)
+dnf -y install $(pkgs "$CTX"/nvidia/packages.txt)
 akmods --force --kernels "$KVER" --kmod nvidia
 
 MOD="/usr/lib/modules/${KVER}/extra/nvidia/nvidia.ko.xz"

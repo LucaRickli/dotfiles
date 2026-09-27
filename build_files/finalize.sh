@@ -54,6 +54,23 @@ sed -i 's/^#\?PassShellAsEnv=.*/PassShellAsEnv=XRDP_ALTERNATE_SHELL/' /etc/xrdp/
 # 6. Open 3389 (firewalld's public zone only allows ssh and dhcpv6-client).
 firewall-offline-cmd --add-service=rdp
 
+# --- noctalia-greeter: the SELinux label of its state dir ---------------------
+# greetd runs the greeter as xdm_t. The policy has no rule for its state dir,
+# /var/lib/noctalia-greeter, so it would be var_lib_t, and so would a file
+# Noctalia's appearance sync writes there (pkexec
+# noctalia-greeter-apply-appearance stays in the user's unconfined_t). The
+# greeter can read such a file but not replace it: every later save of
+# sync.toml fails ("failed to replace ... Permission denied", an unlink AVC),
+# and a colour scheme picked at the login screen does not stick. Labelled like
+# greetd's own state (/var/lib/greetd), whatever is created in it inherits
+# xdm_var_lib_t. tmpfiles.d creates the dir with this label and relabels an
+# existing one at boot (overlay/usr/lib/tmpfiles.d/noctalia-greeter.conf).
+# Like the startwm.sh rule above, it lives in /etc/selinux: a machine where
+# `semanage fcontext` was run by hand keeps its own file_contexts.local on
+# update and needs this line run there once (the boot relabel would otherwise
+# put var_lib_t back). `matchpathcon /var/lib/noctalia-greeter` tells.
+semanage fcontext -a -t xdm_var_lib_t '/var/lib/noctalia-greeter(/.*)?'
+
 # --- niri: the image's default config -----------------------------------------
 # niri reads /etc/niri/config.kdl when the user has no ~/.config/niri/config.kdl,
 # and then writes nothing into $HOME (niri wiki: Integrating niri). Generated
@@ -144,7 +161,8 @@ test ! -e "$(jq -r '.conditions[0]["path-exists"]' /etc/cockpit/metrics.override
 # offers exists. labwc ships no session file (overlay/ provides it); river's
 # and wayfire's are replaced by overlay/ to run the session wrappers.
 test "$(readlink /etc/systemd/system/display-manager.service)" = /usr/lib/systemd/system/greetd.service
-test -x /usr/bin/noctalia-greeter-session          # from noctalia-greeter (Terra)
+rpm -q noctalia-greeter >/dev/null                 # the RPM the `greeter` stage built
+test -x /usr/bin/noctalia-greeter-session
 test -f /usr/share/wayland-sessions/niri.desktop
 test -f /usr/share/wayland-sessions/labwc.desktop  # shipped by overlay/, not by labwc
 test -f /usr/share/wayland-sessions/sway.desktop
@@ -154,6 +172,7 @@ test -x /usr/bin/labwc
 # labwc has no rpm-level dependency on Xwayland but refuses to start without it.
 test -x /usr/bin/Xwayland
 getent passwd greetd >/dev/null                    # the user overlay/etc/greetd/config.toml names
+matchpathcon /var/lib/noctalia-greeter/sync.toml | grep -q ':xdm_var_lib_t:'   # see the label rule above
 # labwc runs this script, not the XDG autostart entries: without it a session
 # has no shell and no polkit agent.
 test -s /etc/xdg/labwc/autostart

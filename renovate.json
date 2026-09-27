@@ -77,7 +77,7 @@
       ]
     },
     {
-      "description": "Everything that automerges goes into ONE weekly PR: one full image build per week instead of one per dependency, and no rebase-and-rebuild cascade when one of many PRs merges. The Monday release ships it",
+      "description": "Everything that automerges (except noctalia-greeter, next rule) goes into ONE weekly PR: one full image build per week instead of one per dependency, and no rebase-and-rebuild cascade when one of many PRs merges. The Monday release ships it",
       "matchUpdateTypes": [
         "minor",
         "patch",
@@ -87,6 +87,18 @@
       ],
       "groupName": "weekly updates",
       "groupSlug": "weekly"
+    },
+    {
+      "description": "noctalia-greeter releases get their own PR, automerged the same way, instead of joining the weekly one: it is built from source (Containerfile, greeter stage), and a release that needs a spec change, such as a new build dependency, would otherwise hold every other update in the weekly PR. Costs one more image build in the weeks it moves",
+      "matchPackageNames": [
+        "noctalia-dev/noctalia-greeter"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "noctalia-greeter",
+      "groupSlug": "greeter"
     },
     {
       "description": "Every action is pinned to a commit for an exact version tag, so a digest update of one means that tag was moved to a different commit, which is what a hijacked action looks like (tj-actions/changed-files, 2025). Never automerged, never mixed into the weekly PR (one non-automerge update would hold the whole group), opened at once",
@@ -116,6 +128,25 @@
         "golang-version"
       ],
       "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "The noctalia-greeter pin is a tag plus the commit that gets built (Containerfile, greeter stage). A new commit for the same tag means upstream moved the tag: never automerged, never in the weekly PR, and opened at once (so after the 3-day rule above, which it lifts: a re-created tag is 0 days old)",
+      "matchPackageNames": [
+        "noctalia-dev/noctalia-greeter"
+      ],
+      "matchUpdateTypes": [
+        "digest"
+      ],
+      "groupName": "moved noctalia-greeter tag",
+      "groupSlug": "greeter-retag",
+      "automerge": false,
+      "minimumReleaseAge": null,
+      "schedule": [
+        "at any time"
+      ],
+      "addLabels": [
+        "security"
+      ]
     },
     {
       "description": "Majors (and replacements) are never automerged: their own PR, CI runs on it, and it waits for the owner (assigned and asked for review) to merge it",
@@ -236,6 +267,16 @@
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\s+ARG [A-Z0-9_]+=(?<currentValue>\\S+)"
       ],
       "extractVersionTemplate": "{{#if extractVersion}}{{{extractVersion}}}{{else}}^(?<version>.+)${{/if}}"
+    },
+    {
+      "customType": "regex",
+      "description": "noctalia-greeter in the Containerfile's greeter stage: the upstream tag (ARG under a '# renovate:' comment) and, on the next ARG line, the commit it points at, bumped together",
+      "managerFilePatterns": [
+        "/^Containerfile$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+ARG [A-Z0-9_]+=(?<currentValue>\\S+)\\s+ARG [A-Z0-9_]+=(?<currentDigest>[0-9a-f]{40})\\b"
+      ]
     }
   ]
 }

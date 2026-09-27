@@ -1,6 +1,7 @@
 # Everything installed into the image, one package per line; `#` comments and
 # blank lines are ignored (build_files/build.sh, which also excludes a few
 # unwanted weak dependencies). Elsewhere: the comps groups (Containerfile),
+# noctalia-greeter (built from source, Containerfile `greeter` stage),
 # GitHub-release binaries (binary.yaml), the NVIDIA driver (nvidia/), and
 # desktop apps, which are Flatpaks (flatpaks.txt).
 
@@ -63,11 +64,10 @@ qt6-qtmultimedia
 noctalia
 
 # --- Greeter -----------------------------------------------------------------
-# greetd + noctalia-greeter (from Terra, overlay/etc/yum.repos.d/terra.repo).
-# See overlay/etc/greetd/config.toml.
+# greetd + noctalia-greeter (not in Fedora: built from source by the
+# Containerfile's `greeter` stage). See overlay/etc/greetd/config.toml.
 greetd
 greetd-selinux
-noctalia-greeter
 
 # --- Desktop basics ----------------------------------------------------------
 # polkit: pkexec, the install wizard's fisherman helper and Noctalia's polkit

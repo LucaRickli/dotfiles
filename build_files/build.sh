@@ -14,7 +14,8 @@ pkgs() { grep -hvE '^\s*(#|$)' "$@"; }
 # --- Packages ----------------------------------------------------------------
 # One transaction. Third-party packages come from the .repo files in
 # overlay/etc/yum.repos.d/, copied in just before this script; `dnf -y`
-# imports each repo's gpgkey= on first use.
+# imports each repo's gpgkey= on first use. noctalia-greeter is the RPM the
+# Containerfile's `greeter` stage built, mounted at /run/greeter.
 #
 # The excludes are weak dependencies that would only duplicate Noctalia and
 # ghostty: niri's upstream defaults (waybar, fuzzel, alacritty, swaylock),
@@ -27,7 +28,7 @@ pkgs() { grep -hvE '^\s*(#|$)' "$@"; }
 dnf -y install \
     --exclude=waybar --exclude=fuzzel --exclude=alacritty --exclude=swaylock \
     --exclude=wf-shell --exclude=foot --exclude=wmenu \
-    $(pkgs "$CTX"/packages/packages.txt)
+    $(pkgs "$CTX"/packages/packages.txt) /run/greeter/noctalia-greeter-*.rpm
 
 # --- Binaries managed by bm (packages/binary.yaml) ---------------------------
 # CI fetches and verifies these in a job of their own (the `bm` job in

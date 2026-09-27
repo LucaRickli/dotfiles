@@ -126,10 +126,12 @@ To pull through a cache: [docs/pull-through-cache.md](docs/pull-through-cache.md
 ## Automatic updates
 
 [Renovate](renovate.json) keeps the pins current (GitHub actions, the `bm`
-binaries, chunkah, the dev container's toolchains) without anyone involved:
+binaries, chunkah, noctalia-greeter's source, the dev container's toolchains)
+without anyone involved:
 
 - On weekends it collects every minor, patch and digest update into one PR,
-  `renovate/weekly`, once each release is three days old. `ci.yml` builds it
+  `renovate/weekly`, once each release is three days old (noctalia-greeter,
+  built from source, gets its own, `renovate/greeter`). `ci.yml` builds it
   (both variants, sealed; the dev container and the live ISO when touched),
   rehearses the signing and promotion steps, and the PR merges itself once
   the `ci-ok` check is green. Monday's release ships it.

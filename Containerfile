@@ -34,6 +34,9 @@ FROM scratch AS ctx
 COPY build_files/build.sh /build_files/
 COPY packages/packages.txt packages/binary.yaml /packages/
 
+FROM scratch AS ctx-greeter
+COPY build_files/greeter.sh build_files/noctalia-greeter.spec /
+
 FROM scratch AS ctx-boot
 COPY build_files/bootloader.sh build_files/initramfs.sh build_files/uki.sh /build_files/
 
@@ -49,6 +52,18 @@ COPY live/ /
 # One base for both the OS image and the live ISO. It floats on the release
 # tag; moving to the next Fedora release is a deliberate edit here.
 FROM quay.io/fedora/fedora-bootc:44 AS base
+
+# noctalia-greeter, which Fedora does not package: built from this upstream
+# tag into an RPM (build_files/greeter.sh) that build.sh installs with the rest.
+# From the same base as the image, so it links against the libraries the image
+# ships, and a base update rebuilds both together. The commit is what gets
+# built, the tag names its version; Renovate bumps both, and a tag moved
+# upstream gets a PR of its own that is never automerged.
+FROM base AS greeter
+# renovate: datasource=github-tags depName=noctalia-dev/noctalia-greeter
+ARG GREETER_VERSION=v1.6.0
+ARG GREETER_COMMIT=44337ecba043749c29de6f3d563315b91987a908
+RUN --mount=type=bind,from=ctx-greeter,source=/,target=/ctx /ctx/greeter.sh
 
 FROM base AS os
 
@@ -82,11 +97,14 @@ RUN dnf -y group install \
 # of overlay/ is copied in further down; build.sh needs these first.
 COPY overlay/etc/yum.repos.d/ /etc/yum.repos.d/
 
-# Packages (packages.txt) and the binaries bm manages (binary.yaml). The
-# expensive layer: nothing below invalidates it. CI mounts the bm binaries
-# pre-fetched and verified as /run/bundle.tar (the `bm` job in build.yml);
-# without one, build.sh syncs them itself.
-RUN --mount=type=bind,from=ctx,source=/,target=/ctx /ctx/build_files/build.sh
+# Packages (packages.txt, plus the greeter RPM from the stage above) and the
+# binaries bm manages (binary.yaml). The expensive layer: nothing below
+# invalidates it. CI mounts the bm binaries pre-fetched and verified as
+# /run/bundle.tar (the `bm` job in build.yml); without one, build.sh syncs
+# them itself.
+RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
+    --mount=type=bind,from=greeter,source=/out,target=/run/greeter \
+    /ctx/build_files/build.sh
 
 # GRUB/bootupd out, systemd-boot in, signed with the db key from keys/
 # (podman secrets, so the private key never enters a layer).
