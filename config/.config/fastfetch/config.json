@@ -9,12 +9,12 @@
     }
   },
   "modules": [
-    "Host",
-    "CPUUsage",
-    "Memory",
-    "Swap",
-    "Disk",
-    "Battery",
-    "Localip"
+    "host",
+    "cpuusage",
+    "memory",
+    "swap",
+    "disk",
+    "battery",
+    "localip"
   ]
 }
