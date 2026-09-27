@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<!--
+  labwc compositor config, following Noctalia's labwc guide
+  (https://docs.noctalia.dev/noctalia/compositor-settings/labwc/).
+
+  The keybinds call `noctalia msg`, so the shell owns the launcher, the control
+  center and the media/brightness keys, as it does in every other session.
+-->
+<labwc_config>
+  <core>
+    <gap>10</gap>
+  </core>
+
+  <windowSwitcher show="yes" preview="no" outlines="yes"/>
+
+  <keyboard>
+    <!-- Shell -->
+    <keybind key="W-d"><action name="Execute" command="noctalia msg panel-toggle launcher"/></keybind>
+    <keybind key="W-n"><action name="Execute" command="noctalia msg panel-toggle control-center"/></keybind>
+    <keybind key="W-l"><action name="Execute" command="noctalia msg session lock"/></keybind>
+
+    <!-- Apps -->
+    <keybind key="W-Return"><action name="Execute" command="ghostty"/></keybind>
+    <keybind key="W-e"><action name="Execute" command="nautilus"/></keybind>
+
+    <!-- Windows -->
+    <keybind key="W-q"><action name="Close"/></keybind>
+    <keybind key="W-f"><action name="ToggleFullscreen"/></keybind>
+    <keybind key="A-Tab"><action name="NextWindow"/></keybind>
+
+    <!-- Media and brightness -->
+    <keybind key="XF86_AudioRaiseVolume"><action name="Execute" command="noctalia msg volume-up"/></keybind>
+    <keybind key="XF86_AudioLowerVolume"><action name="Execute" command="noctalia msg volume-down"/></keybind>
+    <keybind key="XF86_AudioMute"><action name="Execute" command="noctalia msg volume-mute"/></keybind>
+    <keybind key="XF86_MonBrightnessUp"><action name="Execute" command="noctalia msg brightness-up"/></keybind>
+    <keybind key="XF86_MonBrightnessDown"><action name="Execute" command="noctalia msg brightness-down"/></keybind>
+  </keyboard>
+
+  <!-- Swiss layout, matching the image default and the initramfs keymap. -->
+  <keyboard>
+    <layout>
+      <keyboardLayout layout="ch"/>
+    </layout>
+  </keyboard>
+</labwc_config>

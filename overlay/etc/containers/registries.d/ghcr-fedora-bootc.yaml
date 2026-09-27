@@ -1,0 +1,8 @@
+# Tell containers/image to look for the cosign signature as a sigstore
+# attachment on the registry (the `.sig` tag cosign pushes next to the image),
+# which is what /etc/containers/policy.json requires for this repository.
+# Without this the sigstoreSigned rule would find no signature and every pull
+# from this repo would fail.
+docker:
+  ghcr.io/lucarickli/fedora-bootc:
+    use-sigstore-attachments: true

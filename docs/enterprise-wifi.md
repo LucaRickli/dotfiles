@@ -4,7 +4,6 @@
 
 ```sh
 nmcli connection add type wifi \
-  ifname wlan0 \
   con-name enterprise-wifi \
   ssid YOUR_SSID
 

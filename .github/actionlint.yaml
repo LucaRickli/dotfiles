@@ -1,0 +1,7 @@
+# actionlint (ci.yml's lint job) validates runs-on labels against the GitHub-
+# hosted runners it knows, and 1.7.12 predates ubuntu-26.04 (GA 2026-09-17).
+# Listed here until an actionlint release knows it; the key says self-hosted,
+# but it is simply the list of extra labels to accept.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04

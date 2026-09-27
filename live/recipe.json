@@ -1,0 +1,23 @@
+{
+  "log_file": "/var/log/bootc-installer.log",
+  "imgref": "ghcr.io/lucarickli/fedora-bootc:latest-uki",
+
+  "images": [
+    {
+      "name": "Fedora bootc",
+      "imgref": "ghcr.io/lucarickli/fedora-bootc:latest-uki",
+      "bootloader": "systemd",
+      "filesystem": "btrfs",
+      "filesystems": ["btrfs"],
+      "composefs": true,
+      "needs_user_creation": true
+    }
+  ],
+
+  "steps": {
+    "welcome":    { "template": "welcome", "protected": true },
+    "disk":       { "template": "disk" },
+    "encryption": { "template": "encryption" },
+    "user":       { "template": "user" }
+  }
+}

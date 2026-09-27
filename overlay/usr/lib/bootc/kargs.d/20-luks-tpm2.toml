@@ -1,0 +1,5 @@
+# Let the initramfs try the TPM before prompting for a LUKS passphrase.
+# Harmless without LUKS or without a TPM enrollment (it just falls back to the
+# prompt). It must be baked in here because the sealed UKI's command line
+# cannot be changed on the machine. See docs/secureboot-tpm2.md.
+kargs = ["rd.luks.options=tpm2-device=auto"]

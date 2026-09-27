@@ -1,0 +1,18 @@
+# greetd runs noctalia-greeter as the display manager. The live ISO overwrites
+# this file to autologin into labwc instead (live/configure-installer.sh).
+#
+# The greeter lists every session under /usr/share/wayland-sessions/: niri
+# (preselected below), labwc, sway, river and wayfire. It brings its own
+# minimal wlroots compositor, so it needs no session of its own. Fedora needs
+# no PAM patching: /etc/pam.d/greetd-greeter already loads pam_systemd.so for
+# the greeter's logind seat, and user sessions get it via system-auth. The
+# state dir /var/lib/noctalia-greeter comes from tmpfiles.d.
+
+[terminal]
+vt = 1
+
+[default_session]
+# `-- --session niri` only preselects niri in the picker; other sessions stay
+# selectable. `user` matches the account the Fedora greetd package creates.
+command = "/usr/bin/noctalia-greeter-session -- --session niri"
+user = "greetd"

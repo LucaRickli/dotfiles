@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Labwc
+Comment=Stacking Wayland compositor, with the Noctalia shell
+Exec=labwc
+Type=Application
+DesktopNames=labwc
+Keywords=wayland;compositor;wlroots;

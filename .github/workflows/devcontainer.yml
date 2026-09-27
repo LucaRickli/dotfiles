@@ -1,0 +1,78 @@
+# Build the development container (devcontainer/) and push it to
+# ghcr.io/<owner>/devcontainer as :latest and :<yyyymmdd>. Weekly as well, so
+# the Fedora packages in it stay current without a commit. Pull requests get
+# it through ci.yml, the PR gate, and only build and smoke-test.
+name: devcontainer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "devcontainer/**"
+      - ".github/workflows/devcontainer.yml"
+      - ".github/actions/**"
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: devcontainer-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    env:
+      LOCAL: localhost/devcontainer:ci-${{ github.run_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Prepare the runner
+        uses: ./.github/actions/prepare-runner
+        with:
+          need: "25"
+          pull-from: devcontainer/Containerfile
+
+      - name: Build
+        run: podman build --pull=newer -t "$LOCAL" devcontainer/
+
+      # The toolchains run, and the VS Code extensions are in place for the
+      # user Dev Containers connects as.
+      - name: Smoke test
+        run: |
+          podman run --rm --user dev "$LOCAL" bash -lc '
+            set -eux
+            go version; gopls version; dlv version; staticcheck -version
+            golangci-lint version; gofumpt -version
+            deno --version
+            rustc --version; cargo --version; cargo clippy --version; rust-analyzer --version
+            ls ~/.vscode-server/extensions | grep -E "^golang\.go-"
+            ls ~/.vscode-server/extensions | grep -E "^denoland\.vscode-deno-"
+            ls ~/.vscode-server/extensions | grep -E "^rust-lang\.rust-analyzer-"'
+
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push
+        if: github.event_name != 'pull_request'
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/devcontainer"
+          podman push --retry 5 --retry-delay 15s "$LOCAL" "$image:latest"
+          podman push --retry 5 --retry-delay 15s "$LOCAL" "$image:$(date -u +%Y%m%d)"

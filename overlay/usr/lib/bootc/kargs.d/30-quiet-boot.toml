@@ -1,0 +1,8 @@
+# A graphical boot: Plymouth's splash (the bgrt theme: firmware logo, spinner,
+# Fedora logo) and no kernel or systemd text. rhgb starts the splash, quiet and
+# loglevel=3 keep kernel messages (and the EFI stub's) off the screen,
+# rd.udev.log_level=3 does the same for udev in the initramfs, and
+# vt.global_cursor_default=0 hides the text cursor before the greeter starts
+# (on every text console, too: `setterm --cursor on` brings it back there).
+# Press Esc during boot to see the messages; they are in the journal either way.
+kargs = ["rhgb", "quiet", "loglevel=3", "rd.udev.log_level=3", "vt.global_cursor_default=0"]

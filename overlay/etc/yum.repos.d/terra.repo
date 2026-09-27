@@ -1,0 +1,14 @@
+# Terra (Fyra Labs' community repo), for the one package not in Fedora:
+# noctalia-greeter. includepkgs keeps Terra's rebuilds of Fedora packages from
+# shadowing the official ones, so everything else (greetd, wlroots, ...)
+# resolves from fedora/updates.
+[terra]
+name=Terra $releasever
+baseurl=https://repos.fyralabs.com/terra$releasever
+type=rpm
+skip_if_unavailable=false
+gpgcheck=1
+repo_gpgcheck=1
+enabled=1
+gpgkey=https://repos.fyralabs.com/terra$releasever/key.asc
+includepkgs=noctalia-greeter

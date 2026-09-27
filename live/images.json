@@ -1,0 +1,16 @@
+{
+  "default_image": "ghcr.io/lucarickli/fedora-bootc:latest-uki",
+  "fallback_flatpaks": [],
+  "images": [
+    {
+      "name": "Fedora bootc",
+      "imgref": "ghcr.io/lucarickli/fedora-bootc:latest-uki",
+      "desc": "Personal image-based Fedora: systemd-boot + sealed UKI (composefs)",
+      "bootloader": "systemd",
+      "filesystem": "btrfs",
+      "filesystems": ["btrfs"],
+      "composefs": true,
+      "needs_user_creation": true
+    }
+  ]
+}

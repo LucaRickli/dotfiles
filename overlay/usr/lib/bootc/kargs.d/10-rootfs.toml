@@ -1,0 +1,10 @@
+# Kernel arguments for the root filesystem. There is no `root=` here: the
+# initramfs finds the root partition by its GPT partition type UUID
+# (systemd-gpt-auto-generator, "discoverable partitions"), which is also what
+# makes one sealed UKI bootable on any machine without baking in a disk UUID.
+# No `subvol=` either: `bootc install` deploys at the btrfs top level and does
+# NOT create a subvolume, and a subvol= karg here sends the initramfs into the
+# emergency shell. Every install of this image must use that same layout,
+# because the sealed command line can't be adjusted per machine.
+# `bootc container ukify` reads this file and seals the arguments into the UKI.
+kargs = ["rw", "rootflags=compress=zstd:1"]

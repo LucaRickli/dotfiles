@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Wayfire
+Comment=Stacking Wayland compositor with effects, with the Noctalia shell
+Exec=wayfire-session
+Type=Application
+DesktopNames=wayfire
+Keywords=wayland;compositor;wlroots;

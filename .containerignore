@@ -1,0 +1,32 @@
+# Kept out of the build context. The Containerfile COPYs only build_files/,
+# packages/, nvidia/, live/, overlay/ and keys/cosign.pub; the Secure Boot key
+# material enters via `podman build --secret`, never via the context.
+#
+# home/ and dotfiles.sh are listed first on purpose: the dotfiles are NOT part
+# of any image and must never become part of one. Excluding them here means a
+# stray COPY cannot even reach them.
+home
+dotfiles.sh
+
+.git
+.gitignore
+.containerignore
+output
+docs
+.github
+*.md
+Justfile
+renovate.json
+repart.d
+
+# CI drops the verified bm bundle in the workspace (build.yml); it enters the
+# build as a `podman build --volume`, never through the context.
+bundle.tar
+
+# keys/ holds private key material (git-ignored *.key), so the whole directory
+# stays out of the build context. The one exception is the cosign PUBLIC key:
+# the image needs it to verify its own updates (/etc/containers/policy.json),
+# and it is public by definition. Order matters, the negation must come after
+# the directory it re-includes from.
+keys
+!keys/cosign.pub

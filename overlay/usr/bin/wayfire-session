@@ -1,0 +1,13 @@
+#!/bin/sh
+#
+# Start wayfire, from the greeter or an RDP session. wayfire reads only
+# ~/.config/wayfire.ini (no system-wide fallback), and a bare first run would
+# copy its example template there, without the Noctalia shell. So when the
+# user has no config of their own, pass the image's config with -c; it is
+# generated from the packaged example in build_files/finalize.sh. Nothing is
+# written into $HOME.
+
+if [ -r "$HOME/.config/wayfire.ini" ]; then
+    exec wayfire
+fi
+exec wayfire -c /usr/share/fedora-bootc/wayfire.ini

@@ -1,0 +1,5 @@
+# Default root filesystem for `bootc install` (and bcvk): btrfs, matching the
+# rootflags in ../kargs.d/10-rootfs.toml (compression; no subvolumes, since the
+# deployment lives at the btrfs top level).
+[install.filesystem.root]
+type = "btrfs"

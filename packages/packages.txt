@@ -1,0 +1,175 @@
+# Everything installed into the image, one package per line; `#` comments and
+# blank lines are ignored (build_files/build.sh, which also excludes a few
+# unwanted weak dependencies). Elsewhere: the comps groups (Containerfile),
+# GitHub-release binaries (binary.yaml), the NVIDIA driver (nvidia/), and
+# desktop apps, which are Flatpaks (flatpaks.txt).
+
+# --- Base tooling ------------------------------------------------------------
+git
+# Links home/.config into ~/.config (./dotfiles.sh).
+stow
+# Dev environments live in containers (toolbox comes with container-management).
+distrobox
+# LUKS root: the initramfs unlocks it (gpt-auto + rd.luks.options karg).
+cryptsetup
+
+# Scripting utilities
+curl
+jq
+yq
+
+# --- Wayland sessions ---------------------------------------------------------
+# Five sessions, all listed by the greeter and all running the Noctalia shell:
+# niri (scrollable tiling, preselected), labwc (stacking, the RDP default),
+# sway (i3-style tiling), river (dynamic tiling) and wayfire (stacking with
+# effects). Each was verified to run the shell, nested and software-rendered.
+#
+# What each needs beyond the package:
+# - niri reads /etc/niri/config.kdl when the user has none; finalize.sh
+#   generates it from the packaged default, with Noctalia and ghostty in
+#   place of waybar/fuzzel/swaylock/alacritty.
+# - labwc ships no wayland-sessions file (overlay provides it) and autostarts
+#   from /etc/xdg/labwc/autostart.
+# - sway rides its packaged config, which includes /etc/sway/config.d/*.
+# - river is the river-classic package: Fedora's `river` 0.4 is only a
+#   compositor core that needs a window-manager client Fedora does not
+#   package. It has no system-wide init, so overlay/usr/bin/river-session
+#   passes the image's one with -c.
+# - wayfire reads only ~/.config/wayfire.ini, so overlay/usr/bin/
+#   wayfire-session passes a config generated from the packaged example
+#   (finalize.sh).
+niri
+labwc
+sway
+river-classic
+wayfire
+# labwc declares no dependency on Xwayland but fails to start without it
+# ("failed to start xwayland server").
+xorg-x11-server-Xwayland
+xwayland-satellite
+# Portals: -wlr for screencast/screenshot on the wlroots compositors, -gtk for
+# file choosers. niri uses xdg-desktop-portal-gnome (its weak dependency) for
+# screencasting.
+xdg-desktop-portal-wlr
+xdg-desktop-portal-gtk
+matugen
+cliphist
+wl-clipboard
+brightnessctl
+qt6-qtmultimedia
+
+# Noctalia shell (pulls in quickshell). Also the polkit authentication agent
+# for every session.
+noctalia
+
+# --- Greeter -----------------------------------------------------------------
+# greetd + noctalia-greeter (from Terra, overlay/etc/yum.repos.d/terra.repo).
+# See overlay/etc/greetd/config.toml.
+greetd
+greetd-selinux
+noctalia-greeter
+
+# --- Desktop basics ----------------------------------------------------------
+# polkit: pkexec, the install wizard's fisherman helper and Noctalia's polkit
+# agent all need it.
+polkit
+dconf
+nautilus
+gnome-text-editor
+# Settings GUI for network, bluetooth and printers.
+gnome-control-center
+# Secret Service (VS Code and browsers expect one), unlocked at login: the
+# greetd PAM stack has an optional pam_gnome_keyring line, and finalize.sh adds
+# one to the XRDP stack. The PAM module is the -pam subpackage.
+gnome-keyring
+gnome-keyring-pam
+
+# --- Cockpit (web admin) -----------------------------------------------------
+# Installed but off: `sudo systemctl enable --now cockpit.socket`, then
+# http://localhost:9090. It only listens on loopback
+# (overlay/usr/lib/systemd/system/cockpit.socket.d/). Pages: system, services
+# (fail2ban included), logs, accounts, terminal, networking and firewall
+# (-networkmanager), storage (-storaged), SELinux, files, diagnostics
+# (-sosreport), podman containers (-podman, system and per-user). Fedora has no
+# Cockpit plugin for docker or fail2ban. Left out on purpose: -packagekit and
+# -ostree, whose update pages do not apply to a bootc system. The Metrics page
+# is switched off by overlay/etc/cockpit/metrics.override.json (a condition
+# that never holds); delete that file to get it back.
+cockpit-ws
+cockpit-bridge
+cockpit-system
+cockpit-networkmanager
+cockpit-storaged
+cockpit-podman
+cockpit-selinux
+cockpit-files
+cockpit-sosreport
+
+# --- Brute-force protection ---------------------------------------------------
+# Bans hosts that keep failing to log in to sshd or xrdp, as firewalld rich
+# rules. Config: overlay/etc/fail2ban/ (the xrdp filter is ours; fail2ban has
+# none upstream).
+fail2ban-server
+fail2ban-firewalld
+
+# --- Remote desktop (XRDP) ----------------------------------------------------
+# Enabled by default (preset), on 3389. PAM authenticates, then
+# overlay/etc/xrdp/startwm.sh starts the compositor directly; see there and the
+# XRDP block in build_files/finalize.sh. xorgxrdp is the X server the
+# compositors nest inside.
+xrdp
+xorgxrdp
+# The resize watcher in startwm.sh: reads the X screen size (xdpyinfo) and
+# resizes the compositor's window (xdotool).
+xdotool
+xdpyinfo
+# semanage gives /etc/xrdp/startwm.sh its bin_t label (finalize.sh), and
+# matchpathcon asserts it. Named here so a base change cannot drop them.
+policycoreutils-python-utils
+libselinux-utils
+
+# --- Terminal ----------------------------------------------------------------
+fish
+fastfetch
+# From the scottames/ghostty COPR (overlay/etc/yum.repos.d/ghostty-copr.repo).
+ghostty
+
+# --- Audio -------------------------------------------------------------------
+pipewire
+pipewire-alsa
+pipewire-pulseaudio
+pipewire-jack-audio-connection-kit
+pipewire-utils
+wireplumber
+playerctl
+
+# --- Applications ------------------------------------------------------------
+flatpak
+vim-enhanced
+nmap
+
+# Tailscale. Deliberately NOT enabled by the preset; per machine:
+#   sudo systemctl enable --now tailscaled && sudo tailscale up
+tailscale
+
+# Docker: Fedora packages the upstream engine as moby-engine. podman comes
+# with the container-management group.
+moby-engine
+docker-cli
+docker-compose
+docker-buildx
+
+# --- Kernel/module build tools -----------------------------------------------
+# Delete this section to trim the image; a toolbox covers the same.
+bind-utils
+bc
+cpio
+perl
+dwarves
+xmlto
+kmod
+elfutils-libelf-devel
+ncurses
+openssl
+flex
+bison

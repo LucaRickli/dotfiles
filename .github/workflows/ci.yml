@@ -1,0 +1,358 @@
+# The pull request gate. Every PR runs this one workflow, and its last job,
+# `ci-ok`, is the one status check that matters: the main branch ruleset
+# requires it, so nothing merges (Renovate's automerge included) until it is
+# green.
+#
+# Why one gate instead of a pull_request trigger on each workflow:
+#
+# - The image build is a chain (bm -> base -> build matrix) whose later jobs
+#   only exist once the earlier ones finished. "Every check so far is green"
+#   can be true in the gap between two links, and an automerge that looks at
+#   that merges a PR whose build has not even started.
+# - check.yml and devcontainer.yml only matter for some paths. A required
+#   check from a path-filtered workflow never reports on the PRs it skips, and
+#   blocks them forever.
+#
+# `ci-ok` exists on every PR and reports only after everything it depends on
+# has finished: skipped (not affected by this PR) counts as passed, failed or
+# cancelled does not. The ruleset does not require PRs to be up to date with
+# main (every direct push would restart hours of build on the open Renovate
+# PR); what lands is built again by build.yml on the push, and notify.yml
+# reports it if that fails.
+#
+# What a PR gets: lint always; the image build (both variants, sealed),
+# check.yml and devcontainer.yml when the PR can affect them; a rehearsal of
+# the publishing steps (push, sign, verify, promote) always; and the live ISO
+# when something it is made of changes. Together that runs every tool the
+# merge will later publish with, so an automerged update of one is tested
+# before it lands.
+#
+# On a push to main only the lint job runs, and only when CI plumbing changed
+# (build.yml, check.yml and devcontainer.yml run themselves on push): those
+# files are in build.yml's paths-ignore, and without this a push touching only
+# them would run no CI at all.
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - ".github/**"
+      - "renovate.json"
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Which of the expensive workflows this PR can affect. The image rule is
+  # build.yml's `paths-ignore` turned around: anything not listed there can
+  # change the image. This workflow itself counts as everything, so a change to
+  # the wiring runs all of it, and so does the shared prepare-runner action.
+  changes:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      image: ${{ steps.classify.outputs.image }}
+      dotfiles: ${{ steps.classify.outputs.dotfiles }}
+      devcontainer: ${{ steps.classify.outputs.devcontainer }}
+      renovate: ${{ steps.classify.outputs.renovate }}
+      iso: ${{ steps.classify.outputs.iso }}
+    steps:
+      - name: Classify the changed files
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          CHANGED: ${{ github.event.pull_request.changed_files }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = push ]; then
+            # The other workflows run on push by themselves; here only lint.
+            printf '%s\n' image=false dotfiles=false devcontainer=false renovate=true iso=false | tee -a "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Both names of a rename: moving a file out of the image's paths
+          # changes the image too.
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" \
+            --jq '.[] | .filename, (.previous_filename // empty)' > files.txt
+          echo "changed files:"; sed 's/^/  /' files.txt
+
+          image=false dotfiles=false devcontainer=false renovate=false iso=false
+          while IFS= read -r f; do
+            case "$f" in
+              .github/workflows/ci.yml)
+                image=true; dotfiles=true; devcontainer=true; renovate=true; iso=true ;;
+              # used by every job that runs podman
+              .github/actions/*)
+                image=true; dotfiles=true; devcontainer=true; iso=true ;;
+            esac
+            case "$f" in
+              *.md|docs/*|home/*|dotfiles.sh|packages/flatpaks.txt|devcontainer/*|renovate.json|\
+              .github/workflows/check.yml|.github/workflows/devcontainer.yml|\
+              .github/workflows/ci.yml|.github/workflows/notify.yml|\
+              .github/workflows/cleanup.yml|.github/workflows/release.yml|.github/rulesets/*) ;;
+              *) image=true ;;
+            esac
+            case "$f" in
+              home/*|dotfiles.sh|build_files/validate-configs.sh|.github/workflows/check.yml) dotfiles=true ;;
+            esac
+            case "$f" in
+              devcontainer/*|.github/workflows/devcontainer.yml) devcontainer=true ;;
+            esac
+            case "$f" in
+              renovate.json) renovate=true ;;
+            esac
+            # What the live ISO is made of (the `live` stage: base image,
+            # live/, the signature policy and key) and how release.yml and
+            # the Justfile assemble it.
+            case "$f" in
+              Containerfile|.containerignore|Justfile|live/*|overlay/etc/containers/*|keys/cosign.pub|\
+              .github/workflows/release.yml) iso=true ;;
+            esac
+          done < files.txt
+          # The files API stops at 3000 files. Anything that big runs
+          # everything rather than trusting a truncated list.
+          if [ "${CHANGED:-0}" -ge 3000 ]; then
+            echo "::notice::${CHANGED} changed files, more than the API lists: running everything"
+            image=true dotfiles=true devcontainer=true renovate=true iso=true
+          fi
+          {
+            echo "image=$image"
+            echo "dotfiles=$dotfiles"
+            echo "devcontainer=$devcontainer"
+            echo "renovate=$renovate"
+            echo "iso=$iso"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  # Cheap, and on every PR: the workflow files themselves (actionlint runs
+  # shellcheck on every `run:` block), the shell syntax of every script
+  # (`just check` without the dotfile validation, which needs the image), and
+  # the Renovate config when it changed.
+  lint:
+    needs: changes
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    env:
+      # renovate: datasource=docker depName=docker.io/rhysd/actionlint
+      ACTIONLINT_VERSION: "1.7.12"
+      # renovate: datasource=npm depName=renovate
+      RENOVATE_VERSION: "44.115.12"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: actionlint
+        run: |
+          docker run --rm -v "$PWD":/repo:ro --workdir /repo \
+            "docker.io/rhysd/actionlint:${ACTIONLINT_VERSION}" -color
+
+      - name: Shell syntax
+        run: |
+          set -euo pipefail
+          # One at a time: `bash -n a.sh b.sh` parses only a.sh.
+          for f in build_files/*.sh nvidia/nvidia.sh live/*.sh dev/*.sh; do
+            bash -n "$f"
+          done
+          sh -n dotfiles.sh
+
+      # Renovate needs a current Node (44.x: 24 or newer).
+      - name: Node for Renovate
+        if: needs.changes.outputs.renovate == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+
+      - name: Renovate config
+        if: needs.changes.outputs.renovate == 'true'
+        # No file argument: with one, the validator treats it as a GLOBAL
+        # (self-hosted) config. Without, it finds renovate.json and checks it
+        # as the repository config it is.
+        run: npx --yes --package "renovate@${RENOVATE_VERSION}" -- renovate-config-validator --strict
+
+  # No secrets on purpose, not even for Renovate's same-repository PRs: a PR
+  # build pushes and signs nothing, so it uses a throwaway Secure Boot key,
+  # and code that has not been reviewed or merged never runs next to the
+  # real keys.
+  image:
+    needs: changes
+    if: needs.changes.outputs.image == 'true'
+    uses: ./.github/workflows/build.yml
+    # What build.yml's jobs ask for. On a pull request nothing is pushed; fork
+    # PRs get a read-only token whatever is granted here.
+    permissions:
+      contents: read
+      packages: write
+
+  dotfiles:
+    needs: changes
+    if: needs.changes.outputs.dotfiles == 'true'
+    uses: ./.github/workflows/check.yml
+    permissions:
+      contents: read
+
+  devcontainer:
+    needs: changes
+    if: needs.changes.outputs.devcontainer == 'true'
+    uses: ./.github/workflows/devcontainer.yml
+    permissions:
+      contents: read
+      packages: write
+
+  # The publishing half of build.yml and release.yml, which a pull request
+  # never reaches (nothing is pushed or signed there): the same registry
+  # login, cosign-installer and cosign release, the same push, sign and
+  # verify flags, and release.yml's digest-preserving promotion, rehearsed
+  # on a stand-in image against a throwaway registry on the runner. So a
+  # Renovate bump of any of these tools is tested before it merges, not by
+  # the next push to main or the Monday release. Cheap, so on every PR.
+  #
+  # When changing a pin here, change it in build.yml and release.yml too
+  # (Renovate updates all of them in the same PR).
+  signing:
+    needs: changes
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    env:
+      # The distribution project's own image on ghcr.io, not Docker Hub's
+      # `registry`, which rate-limits anonymous pulls.
+      # renovate: datasource=docker depName=ghcr.io/distribution/distribution
+      REGISTRY_VERSION: "3.1.2"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Prepare the runner
+        uses: ./.github/actions/prepare-runner
+        with:
+          need: "10"
+
+      # Read-only on a pull request, but it proves the action still logs in.
+      - name: Login to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
+
+      - name: Push, sign, verify and promote on a local registry
+        run: |
+          set -euo pipefail
+          # A registry of our own on localhost (plain HTTP), so nothing is
+          # pushed anywhere real and no write token is needed.
+          podman run -d --rm --name ci-registry -p 127.0.0.1:5000:5000 \
+            "ghcr.io/distribution/distribution:${REGISTRY_VERSION}"
+          trap 'podman rm -f ci-registry >/dev/null 2>&1 || true' EXIT
+          for _ in $(seq 30); do curl -fsS http://127.0.0.1:5000/v2/ >/dev/null 2>&1 && break; sleep 1; done
+          repo=localhost:5000/ci/fedora-bootc
+
+          # A stand-in for the OS image: small, but pushed, signed and
+          # promoted with the same commands and flags as the real one.
+          printf 'FROM scratch\nCOPY keys/cosign.pub /stand-in\n' > "${RUNNER_TEMP}/Containerfile.stand-in"
+          podman build -f "${RUNNER_TEMP}/Containerfile.stand-in" -t ci-stand-in .
+          podman push --retry 5 --retry-delay 15s --tls-verify=false \
+            --digestfile="${RUNNER_TEMP}/digestfile" ci-stand-in "${repo}:build-ci"
+          digest=$(cat "${RUNNER_TEMP}/digestfile")
+
+          # A throwaway key: this proves the tooling, not the key, and keeps
+          # the real SIGNING_SECRET away from pull request code.
+          COSIGN_PASSWORD="" cosign generate-key-pair --output-key-prefix "${RUNNER_TEMP}/ci"
+          COSIGN_PRIVATE_KEY=$(cat "${RUNNER_TEMP}/ci.key")
+          export COSIGN_PRIVATE_KEY COSIGN_PASSWORD=""
+          cosign sign -y --new-bundle-format=false --use-signing-config=false \
+            --tlog-upload=false --key env://COSIGN_PRIVATE_KEY "${repo}@${digest}"
+          cosign verify --key "${RUNNER_TEMP}/ci.pub" --insecure-ignore-tlog=true "${repo}@${digest}" >/dev/null
+
+          # Promotion as in release.yml: a registry-side copy that must keep
+          # the digest, so that the signature still covers the promoted tag.
+          skopeo copy --all --preserve-digests --retry-times 3 \
+            --src-tls-verify=false --dest-tls-verify=false \
+            "docker://${repo}:build-ci" "docker://${repo}:latest"
+          promoted=$(skopeo inspect --tls-verify=false --format '{{.Digest}}' "docker://${repo}:latest")
+          [ "$promoted" = "$digest" ] || { echo "promotion changed the digest: ${digest} -> ${promoted}" >&2; exit 1; }
+          cosign verify --key "${RUNNER_TEMP}/ci.pub" --insecure-ignore-tlog=true "${repo}:latest" >/dev/null
+          echo "pushed, signed, verified and promoted ${repo}@${digest}"
+
+  # The live image and the install ISO, as release.yml builds them (`just
+  # iso`), whenever something they are made of changes. Nothing is pushed or
+  # published. The first place the rootless Flatpak install of the live stage
+  # runs before a release.
+  iso:
+    needs: changes
+    if: needs.changes.outputs.iso == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Prepare the runner
+        uses: ./.github/actions/prepare-runner
+        with:
+          need: "35"
+          pull-from: Containerfile
+          pull: quay.io/fedora/fedora:latest
+
+      - name: Install just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: "1.58.0"
+
+      - name: Build the ISO
+        run: |
+          set -euo pipefail
+          just iso
+          iso=$(find output -maxdepth 1 -name '*.iso' | head -1)
+          test -n "$iso" || { echo "just iso produced no ISO in output/" >&2; exit 1; }
+          size=$(stat -c %s "$iso")
+          echo "${iso}: $((size / 1024 / 1024)) MiB"
+          if [ "$size" -ge $((2 * 1024 * 1024 * 1024)) ]; then
+            echo "::notice::over GitHub's 2 GiB asset limit; release.yml will split it"
+          fi
+
+      - name: Disk usage on failure
+        if: failure()
+        run: |
+          df -h / || true
+          podman images --format '{{.Repository}}:{{.Tag}} {{.Size}}' || true
+
+  ci-ok:
+    needs: [changes, lint, image, dotfiles, devcontainer, signing, iso]
+    if: always()
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Everything that ran passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$NEEDS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")' >/dev/null

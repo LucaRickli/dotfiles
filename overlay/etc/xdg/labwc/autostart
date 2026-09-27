@@ -1,0 +1,12 @@
+# System-wide labwc autostart. labwc runs this script itself and does NOT
+# process /etc/xdg/autostart, so anything the session needs belongs here. A
+# ~/.config/labwc/autostart shadows this one entirely (no merge); the repo's
+# own copy is home/.config/labwc/autostart.
+#
+# noctalia is the shell (bar, launcher, notifications) and the polkit agent,
+# so it is what makes pkexec prompts work here.
+
+noctalia &
+
+# Secret Service for apps that expect one (VS Code, browsers).
+/usr/bin/gnome-keyring-daemon --start --components=secrets &

@@ -1,4 +1,0 @@
-visual-studio-code-bin
-bruno
-onlyoffice-bin
-remote-desktop-manager

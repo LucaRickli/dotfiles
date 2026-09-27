@@ -1,9 +1,18 @@
+# Build output
+output/
+*.qcow2
+# rechunked OCI directory written by the chunkah build stage
+/out/
+
+# kernel + initramfs handed from phase one to the sealing stage (Containerfile)
+/kernel/
+
+# Log files
 *.log
 
 # Secrets
 .env
 *.env
-*.pem
 *.key
 *.crt
 *.gpg
@@ -13,5 +22,6 @@ secrets.*
 secret.*
 id_*
 
+# Miscellaneous
 **/completions/copilot.fish
 **/fastfetch/themes/noctalia.jsonc

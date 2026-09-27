@@ -1,0 +1,10 @@
+# useradd defaults (the base image's /etc/default/useradd with SHELL changed):
+# a plain `useradd` gives fish. The ISO wizard passes --shell /bin/bash itself.
+# HOME must stay /var/home on bootc (/home is a symlink to var/home).
+GROUP=100
+HOME=/var/home
+INACTIVE=-1
+EXPIRE=
+SHELL=/usr/bin/fish
+SKEL=/etc/skel
+CREATE_MAIL_SPOOL=yes

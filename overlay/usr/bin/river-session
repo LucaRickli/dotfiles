@@ -1,0 +1,11 @@
+#!/bin/sh
+#
+# Start river (river-classic), from the greeter or an RDP session. river runs
+# ~/.config/river/init and NOTHING else: there is no system-wide init, and
+# without one the session has zero keybindings. So when the user has no init
+# of their own, pass the image's init with -c. Nothing is written into $HOME.
+
+if [ -x "$HOME/.config/river/init" ]; then
+    exec river
+fi
+exec river -c /usr/libexec/fedora-bootc/river-init

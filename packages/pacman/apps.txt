@@ -1,7 +1,0 @@
-nautilus
-firefox
-vim
-nmap
-tailscale
-docker
-docker-compose

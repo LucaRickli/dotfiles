@@ -1,0 +1,617 @@
+# Build the OS image and push it to GHCR (ghcr.io/<owner>/fedora-bootc).
+#
+# A build publishes exactly ONE tag per image and overwrites nothing:
+#
+#   build-<sha>              the OS, unsealed: an ordinary bootc image
+#   build-<sha>-uki          the same thing sealed into a signed UKI
+#   build-<sha>-nvidia       unsealed, with the NVIDIA driver
+#   build-<sha>-nvidia-uki   that one sealed
+#
+# The unsealed ones carry the plain names; -uki says what was done to it. The
+# tags machines follow (latest, latest-uki, nvidia, nvidia-uki) are never
+# written here: release.yml promotes a build to them once its ISO is built and
+# the release is published, by pointing those tags at a digest that already
+# exists. Promotion keeps the digest, so the cosign signature made here still
+# covers it.
+#
+# Every build is therefore installable and none of them displaces another. Old
+# ones are collected at the end of this file.
+#
+# Runs on pushes to main (changes that cannot touch the image excluded, check.yml
+# and ci.yml cover those), on demand, and as the first job of a release. It has
+# no schedule of its own: the weekly release rebuilds on the floating Fedora
+# base, and Renovate's merges (actions, bm binaries, chunkah) trigger a build.
+# Pull requests reach it through ci.yml, the PR gate, and only build.
+# Images are signed with cosign; unsigned images are unusable, see "Sign image".
+#
+# Runs on GitHub-hosted ubuntu-26.04 runners (rootless podman 5.x). Each job is
+# a fresh VM with no layer cache, so every job builds what it needs from
+# scratch; .github/actions/prepare-runner gets the VM ready for that.
+name: build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      # dotfiles are not part of the image; check.yml validates them
+      - "home/**"
+      - "dotfiles.sh"
+      - ".github/workflows/check.yml"
+      # not part of the image either: devcontainer.yml builds the dev
+      # container, and the Flatpak list is installed per machine
+      - "devcontainer/**"
+      - ".github/workflows/devcontainer.yml"
+      - "packages/flatpaks.txt"
+      # CI plumbing that builds nothing itself; ci.yml lints it on push
+      - "renovate.json"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/notify.yml"
+      - ".github/workflows/cleanup.yml"
+      - ".github/workflows/release.yml"
+      - ".github/rulesets/**"
+  workflow_dispatch:
+  # Called by release.yml and by ci.yml (pull requests). No inputs and no
+  # outputs: the caller already knows the names (build-<sha>...), and an
+  # output would be last-matrix-job-wins here, which is worse than none.
+  workflow_call:
+
+# The group is prefixed rather than just ${{ github.workflow }}, because in a
+# called workflow that variable holds the CALLER's name: without the prefix a
+# release run's build job and the release workflow itself would share a group.
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  # Only push/PR builds supersede each other. A release must not be cancelled
+  # halfway by an unrelated push to main.
+  cancel-in-progress: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+
+# bash with -o pipefail on every step (the implicit default shell has no
+# pipefail), so a failing command on the left of a pipe fails the step.
+defaults:
+  run:
+    shell: bash
+
+env:
+  IMAGE_NAME: fedora-bootc
+  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  # The GitHub-release binaries bm manages (packages/binary.yaml), fetched and
+  # verified OUTSIDE the image build. Release downloads are the flakiest step
+  # of the whole pipeline (GitHub resets connections often enough to matter,
+  # for bm's own download as much as for what it fetches), so they happen in a
+  # small job where a retry costs seconds instead of failing minutes into an
+  # image build, and the verified result is cached keyed on binary.yaml: a
+  # build only touches release downloads when Renovate bumps a version.
+  # bm checks every file in-process (sha256, PGP, cosign, sigstore bundles via
+  # its own libraries), so the runner needs nothing installed and nothing
+  # unverified ever enters the bundle.
+  #
+  # The bundle is a tar mirroring the filesystem it lands on (usr/bin/...).
+  # The image build gets it as a /run/bundle.tar volume and build.sh unpacks it
+  # instead of syncing; local builds have no bundle and sync directly.
+  bm:
+    name: bm bundle
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # This cache is BOTH the cross-run reuse and the handoff to the base and
+      # build jobs, which restore the same key instead of passing a ~900 MB
+      # artifact up and back down. They run after this job, so the save (at
+      # job end, on a miss) is finished first, and an intra-run restore hits
+      # regardless of git ref, so it works on a tag-scoped release too.
+      # Exact key only: bm keeps no state and re-downloads everything on every
+      # sync (measured), so restoring an older bundle would win nothing.
+      - name: Cached bundle
+        id: cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bundle.tar
+          key: bm-bundle-${{ hashFiles('packages/binary.yaml') }}
+
+      - name: Fetch and verify the binaries
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          cfg=packages/binary.yaml
+          # GitHub's Ubuntu runners ship mikefarah's Go yq, the same flavour
+          # the image build uses (build.sh), so these are its expressions.
+          # Refuse the jq-based python-yq instead of feeding curl garbage: its
+          # syntax differs (-y, --arg) and `-r` alone would still "work".
+          yq --version | grep -q mikefarah || { echo "needs mikefarah's Go yq, found: $(yq --version 2>&1)" >&2; exit 1; }
+          #
+          # Bootstrap bm itself, checksum-verified, with the same retry the
+          # sync gets: its own download is as flaky as what it fetches.
+          bm_url=$(yq '.releases[] | select(.id == "bm") | .src' "$cfg")
+          bm_sum=$(yq '.releases[] | select(.id == "bm") | .integrity.signature' "$cfg")
+          bm="${RUNNER_TEMP}/bm"
+          for attempt in 1 2 3; do
+            if curl -fsSL -o "$bm" "$bm_url" &&
+               echo "$(curl -fsSL "$bm_sum" | awk '{print $1}')  $bm" | sha256sum -c -; then
+              break
+            fi
+            [ "$attempt" = 3 ] && { echo "bm bootstrap failed after 3 attempts" >&2; exit 1; }
+            echo "bm bootstrap attempt $attempt failed, retrying in 10s" >&2
+            sleep 10
+          done
+          chmod +x "$bm"
+          # A copy of the config with every dst redirected into ./stage, so
+          # the bundle mirrors the tree it will be unpacked onto.
+          stage="$PWD/stage" yq '.releases[].dst |= (strenv(stage) + .)' "$cfg" > "${RUNNER_TEMP}/bundle.yaml"
+          yq '.releases[].dst' "${RUNNER_TEMP}/bundle.yaml" | sort -u | while read -r d; do mkdir -p "$d"; done
+          # bm has no retry of its own and one failed release fails the whole
+          # sync; it reconciles against the config, so re-running is safe.
+          for attempt in 1 2 3; do
+            if "$bm" sync -c "${RUNNER_TEMP}/bundle.yaml"; then break; fi
+            [ "$attempt" = 3 ] && { echo "bm sync failed after 3 attempts" >&2; exit 1; }
+            echo "bm sync attempt $attempt failed, retrying in 10s" >&2
+            sleep 10
+          done
+          test -x stage/usr/bin/bm && test -x stage/usr/bin/kubectl
+          tar -cf bundle.tar -C stage usr
+
+  # The unsealed OS: packages, overlay, services, bootloader, and its kernel
+  # still in place. Built once and sealed twice, which is the only reason it
+  # is a separate job; it is also a usable image on its own, installable the
+  # conventional way when the sealed one is inconvenient.
+  #
+  # Not on pull requests: nothing is pushed there, so the sealing jobs could
+  # not start from it anyway (each job is its own VM) and build the `os` stage
+  # themselves. Building it here as well would only cost an hour.
+  base:
+    name: base
+    needs: bm
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      ref: ${{ steps.push.outputs.ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Prepare the runner
+        uses: ./.github/actions/prepare-runner
+        with:
+          need: "30"
+          pull-from: Containerfile
+
+      # Written OUTSIDE the checkout: the builds mount the whole workspace at
+      # /run/src into every RUN step (the chunkah handover), and the key must
+      # only ever reach the steps that mount it as a secret.
+      - name: Secure Boot signing key
+        env:
+          SECUREBOOT_PRIVATE_KEY: ${{ secrets.SECUREBOOT_PRIVATE_KEY }}
+        run: |
+          test -n "$SECUREBOOT_PRIVATE_KEY" || { echo "SECUREBOOT_PRIVATE_KEY secret is not set; see keys/README.md"; exit 1; }
+          test -f keys/db/db.pem || { echo "keys/db/db.pem is missing (run: just keygen, commit the public halves)"; exit 1; }
+          sb="${RUNNER_TEMP}/secureboot"
+          install -d -m 700 "$sb"
+          (umask 077; printf '%s\n' "$SECUREBOOT_PRIVATE_KEY" > "$sb/db.key")
+          cp keys/db/db.pem "$sb/db.pem"
+          echo "SB_DIR=$sb" >> "$GITHUB_ENV"
+
+      # The save finished before this job started (needs: bm), so
+      # fail-on-cache-miss is a real assertion, not a race.
+      - name: Restore the bm bundle
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bundle.tar
+          key: bm-bundle-${{ hashFiles('packages/binary.yaml') }}
+          fail-on-cache-miss: true
+
+      - name: Build
+        run: |
+          podman build --pull=newer \
+            --secret "id=secureboot_key,src=${SB_DIR}/db.key" \
+            --secret "id=secureboot_cert,src=${SB_DIR}/db.pem" \
+            --volume "$(pwd)/bundle.tar:/run/bundle.tar:ro" \
+            --target os \
+            --tag "${IMAGE_NAME}:base" \
+            .
+          rm -rf "$SB_DIR"
+          df -h /
+
+      - name: Login to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Same naming rule as any other build: one tag, immutable, collides with
+      # nothing. The sealed builds below start from this exact image, handed
+      # on by DIGEST: a push build and a release of the same commit can run at
+      # once and both push build-<sha>, and each must seal its own base.
+      - name: Push
+        id: push
+        run: |
+          registry="${IMAGE_REGISTRY,,}"
+          tag="build-${GITHUB_SHA:0:7}"
+          podman push --retry 5 --retry-delay 15s --digestfile="${RUNNER_TEMP}/digestfile" \
+            "${IMAGE_NAME}:base" "${registry}/${IMAGE_NAME}:${tag}"
+          digest=$(cat "${RUNNER_TEMP}/digestfile")
+          echo "ref=${registry}/${IMAGE_NAME}@${digest}" >> "$GITHUB_OUTPUT"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
+
+      # Signed like everything else here: the image's own policy refuses an
+      # unsigned pull from this repo, and this one is meant to be installable.
+      - name: Sign
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          test -n "$COSIGN_PRIVATE_KEY" || { echo "SIGNING_SECRET is not set"; exit 1; }
+          ref="${IMAGE_REGISTRY,,}/${IMAGE_NAME}@${DIGEST}"
+          # Retried: a registry hiccup here would otherwise throw away the
+          # hour the build took. Signing the same digest twice is harmless.
+          for attempt in 1 2 3; do
+            cosign sign -y --new-bundle-format=false --use-signing-config=false \
+              --tlog-upload=false --key env://COSIGN_PRIVATE_KEY "$ref" && break
+            [ "$attempt" = 3 ] && exit 1
+            echo "cosign sign attempt $attempt failed, retrying in 15s" >&2; sleep 15
+          done
+          cosign verify --key keys/cosign.pub --insecure-ignore-tlog=true "$ref"
+
+  build:
+    name: build (${{ matrix.variant }})
+    needs: [bm, base]
+    # Runs after a successful base, or without one on a pull request (base is
+    # skipped there, see above); never after a failure or a cancel.
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 300
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: main
+            tag: latest
+            seal: os-image
+            suffix: "-uki"
+          - variant: nvidia
+            tag: nvidia
+            seal: os-nvidia
+            suffix: "-nvidia-uki"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # First, because the runner preparation below already pulls the base the
+      # job above pushed, and that package may still be private (a new fork).
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The build needs real room, because the rechunk means the image exists
+      # three times at once, measured on the NVIDIA variant:
+      #
+      #   rootfs stage          12.1 GB
+      #   out/ (rechunk)        10.0 GB
+      #   re-imported copy      11.7 GB   (`FROM oci:out`, shares no layers)
+      #   base + tools           3.0 GB
+      #
+      # A public-repo runner has ~90 GB free on its root disk, where both the
+      # workspace (out/, kernel/) and rootless podman's storage live; the
+      # action frees more if a runner comes with less, and fails right here
+      # if 50 GB are not there.
+      - name: Prepare the runner
+        uses: ./.github/actions/prepare-runner
+        with:
+          pull-from: Containerfile
+          # the base pushed above; empty on a pull request
+          pull: ${{ needs.base.outputs.ref }}
+
+      # Only pull requests build the `os` stage in this job (nothing was
+      # pushed, so OS_BASE stays `os`). Pushed builds start FROM the ref the
+      # base job pushed and never run build.sh here.
+      - name: Restore the bm bundle (pull requests build the base here)
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bundle.tar
+          key: bm-bundle-${{ hashFiles('packages/binary.yaml') }}
+          fail-on-cache-miss: true
+
+      # The db key signs systemd-boot, the sealed UKI and (on the NVIDIA
+      # variant) the kernel modules. A machine that enrolled the key can only
+      # Secure-Boot images signed with it, so pushed builds REQUIRE the
+      # secret. Pull requests never get it, not even Renovate's from this
+      # repository (ci.yml passes no secrets): they push nothing, so a
+      # throwaway key exercises the build end to end just as well, and code
+      # nobody has reviewed yet never runs next to the real one.
+      #
+      # Written OUTSIDE the checkout: the builds mount the whole workspace at
+      # /run/src into every RUN step (the chunkah handover), and the key must
+      # only ever reach the steps that mount it as a secret.
+      - name: Secure Boot signing key
+        env:
+          SECUREBOOT_PRIVATE_KEY: ${{ secrets.SECUREBOOT_PRIVATE_KEY }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          sb="${RUNNER_TEMP}/secureboot"
+          install -d -m 700 "$sb"
+          if [ "$EVENT" = "pull_request" ]; then
+            openssl req -x509 -new -nodes -newkey rsa:4096 -sha256 -days 1 -batch \
+              -subj "/CN=throwaway PR build key/" \
+              -keyout "$sb/db.key" -out "$sb/db.pem"
+          elif [ -n "$SECUREBOOT_PRIVATE_KEY" ]; then
+            test -f keys/db/db.pem || { echo "keys/db/db.pem is missing (run: just keygen, commit the public halves)"; exit 1; }
+            (umask 077; printf '%s\n' "$SECUREBOOT_PRIVATE_KEY" > "$sb/db.key")
+            cp keys/db/db.pem "$sb/db.pem"
+          else
+            echo "SECUREBOOT_PRIVATE_KEY secret is not set; pushed images must be signed with the enrolled db key (keys/README.md)"
+            exit 1
+          fi
+          echo "SB_DIR=$sb" >> "$GITHUB_ENV"
+
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          # cosign v3 needs cosign-installer v4: v3 releases publish a
+          # .sigstore.json bundle instead of the .sig the older action fetches
+          # to verify the download, and it fails with curl exit 22 on the 404.
+          # Renovate bumps this pin together with the action (its
+          # github-actions manager knows cosign-release). The
+          # --new-bundle-format=false / --use-signing-config=false flags below
+          # undo v3's new defaults.
+          cosign-release: "v3.1.3"
+
+      # The NVIDIA driver on the unsealed base, published in its own right for
+      # the same reason the base is: kernel in place, installable the ordinary
+      # way. It costs little extra, because the sealed build below goes
+      # through this very stage and reuses its layers on this runner.
+      - name: Push the unsealed NVIDIA variant
+        if: github.event_name != 'pull_request' && matrix.variant == 'nvidia'
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+          BASE_REF: ${{ needs.base.outputs.ref }}
+        run: |
+          set -euo pipefail
+          test -n "$COSIGN_PRIVATE_KEY" || { echo "SIGNING_SECRET is not set"; exit 1; }
+          registry="${IMAGE_REGISTRY,,}"
+          tag="build-${GITHUB_SHA:0:7}-nvidia"
+          base_arg=()
+          if [ -n "$BASE_REF" ]; then
+            base_arg=(--build-arg "OS_BASE=${BASE_REF}")
+          fi
+          podman build --pull=newer \
+            --secret "id=secureboot_key,src=${SB_DIR}/db.key" \
+            --secret "id=secureboot_cert,src=${SB_DIR}/db.pem" \
+            "${base_arg[@]}" --target os-nvidia \
+            --tag "${IMAGE_NAME}:nvidia-plain" .
+          podman push --retry 5 --retry-delay 15s --digestfile="${RUNNER_TEMP}/plain-digest" \
+            "${IMAGE_NAME}:nvidia-plain" "${registry}/${IMAGE_NAME}:${tag}"
+          ref="${registry}/${IMAGE_NAME}@$(cat "${RUNNER_TEMP}/plain-digest")"
+          for attempt in 1 2 3; do
+            cosign sign -y --new-bundle-format=false --use-signing-config=false \
+              --tlog-upload=false --key env://COSIGN_PRIVATE_KEY "$ref" && break
+            [ "$attempt" = 3 ] && exit 1
+            echo "cosign sign attempt $attempt failed, retrying in 15s" >&2; sleep 15
+          done
+          cosign verify --key keys/cosign.pub --insecure-ignore-tlog=true "$ref"
+          echo "pushed ${registry}/${IMAGE_NAME}:${tag}"
+
+      - name: Build image
+        env:
+          BASE_REF: ${{ needs.base.outputs.ref }}
+          SEAL: ${{ matrix.seal }}
+          TAG: ${{ matrix.tag }}
+        run: |
+          set -euo pipefail
+          # Two invocations, split at the `FROM oci:out` seam. The chunkah
+          # stage writes out/ on the host and the next stage reads it back,
+          # which podman's stage graph cannot see, so a runner that builds
+          # stages concurrently can evaluate `FROM oci:out` before it exists
+          # ("open out/index.json: no such file or directory"). See the
+          # Justfile's `_build`, which does the same thing.
+          # Removed, not emptied: chunkah fails with "output path already
+          # exists" if out/ is there at all, even empty.
+          rm -rf out kernel
+          # Start from the base the job above pushed, so the packages are built
+          # once per run instead of once per variant. On a pull request the
+          # ref is empty and the Containerfile's own `os` stage is used.
+          base_arg=()
+          if [ -n "$BASE_REF" ]; then
+            base_arg=(--build-arg "OS_BASE=${BASE_REF}")
+          fi
+          # Only present on a pull request (restored above for build.sh).
+          bundle_arg=()
+          if [ -f bundle.tar ]; then
+            bundle_arg=(--volume "$(pwd)/bundle.tar:/run/bundle.tar:ro")
+          fi
+          secrets=(--secret "id=secureboot_key,src=${SB_DIR}/db.key"
+                   --secret "id=secureboot_cert,src=${SB_DIR}/db.pem")
+          # Phase 1: rootfs, split, the rechunk into out/, and the kernel out
+          # to kernel/ so that phase 2 needs nothing from the rootfs stages.
+          podman build --pull=newer "${secrets[@]}" \
+            --volume "$(pwd)":/run/src "${bundle_arg[@]}" \
+            "${base_arg[@]}" --build-arg "SEAL=${SEAL}" \
+            --target chunkah \
+            .
+          # --pull=missing from here on: phase 1a pulled everything, and a
+          # base image republished in the meantime (fedora-bootc:44 moves
+          # daily) must not give kernel/ a different rootfs than out/.
+          podman build --pull=missing "${secrets[@]}" \
+            --volume "$(pwd)":/run/src "${bundle_arg[@]}" \
+            "${base_arg[@]}" --build-arg "SEAL=${SEAL}" \
+            --target kernel-out \
+            .
+          echo "--- after the rechunk (phase 1) ---"; df -h /; du -sh out kernel
+          # Both handovers are bind-mount writes that podman can lose
+          # silently (buildah 1.42 turns a rw context bind into a throwaway
+          # overlay; only the --volume makes them reach the host), so check.
+          test -f out/index.json || { echo "chunkah wrote no out/index.json to the host" >&2; exit 1; }
+          compgen -G 'kernel/*/vmlinuz' >/dev/null || { echo "kernel-out wrote no kernel/<version>/vmlinuz to the host" >&2; exit 1; }
+          # out/ and kernel/ are on disk now, so nothing in phase two refers to
+          # the rootfs or split stages, and --skip-unused-stages keeps it from
+          # rebuilding them.
+          podman build --pull=missing --skip-unused-stages "${secrets[@]}" \
+            --volume "$(pwd)":/run/src \
+            "${base_arg[@]}" --build-arg "SEAL=${SEAL}" \
+            --target final \
+            --tag "${IMAGE_NAME}:${TAG}" \
+            .
+          rm -rf "$SB_DIR"
+          echo "--- after the seal (phase 2) ---"; df -h /
+          # Dead once phase 2 read it, and the push below needs the room.
+          rm -rf out kernel
+          df -h /
+
+      # One tag, named after the commit, so a build is identifiable, immutable
+      # and collides with nothing. Nothing else is written from here.
+      - name: Image tag
+        id: tags
+        env:
+          SUFFIX: ${{ matrix.suffix }}
+        run: |
+          tags="build-${GITHUB_SHA:0:7}${SUFFIX}"
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+          echo "tag: ${tags}"
+
+      - name: Push
+        if: github.event_name != 'pull_request'
+        id: push
+        env:
+          TAGS: ${{ steps.tags.outputs.tags }}
+          TAG: ${{ matrix.tag }}
+        run: |
+          registry="${IMAGE_REGISTRY,,}"   # GHCR wants a lowercase owner
+          for tag in $TAGS; do
+            podman push --retry 5 --retry-delay 15s --digestfile="${RUNNER_TEMP}/digestfile" \
+              "${IMAGE_NAME}:${TAG}" "${registry}/${IMAGE_NAME}:${tag}"
+          done
+          echo "digest=$(cat "${RUNNER_TEMP}/digestfile")" >> "$GITHUB_OUTPUT"
+          echo "image=${registry}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      # Key-based signing (not keyless): bootc/podman verify sigstore
+      # signatures via containers-policy.json, which cannot express a GitHub
+      # Actions OIDC identity. The key pair is `keys/cosign.{key,pub}` (`just
+      # cosign-keygen`): commit the public half, store the private half as the
+      # SIGNING_SECRET secret.
+      #
+      # Signing is REQUIRED, not optional: the image ships a policy.json that
+      # refuses any unsigned pull from this repo, so an unsigned push would
+      # produce an image no machine could install or upgrade to.
+      - name: Sign image
+        if: github.event_name != 'pull_request'
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+          REF: ${{ steps.push.outputs.image }}@${{ steps.push.outputs.digest }}
+        run: |
+          test -n "$COSIGN_PRIVATE_KEY" || {
+            echo "SIGNING_SECRET is not set. The image requires a valid cosign"
+            echo "signature to be pullable (overlay/etc/containers/policy.json),"
+            echo "so pushing unsigned would ship an unusable image."
+            echo "Set it to the contents of keys/cosign.key (keys/README.md)."
+            exit 1
+          }
+          # --tlog-upload=false: the trust anchor is the key in the image, not
+          # the public transparency log, and the machine-side policy does not
+          # consult Rekor either. Retried: a registry hiccup here would
+          # otherwise throw away the build. Signing twice is harmless.
+          for attempt in 1 2 3; do
+            cosign sign -y --new-bundle-format=false --use-signing-config=false \
+              --tlog-upload=false --key env://COSIGN_PRIVATE_KEY "$REF" && break
+            [ "$attempt" = 3 ] && exit 1
+            echo "cosign sign attempt $attempt failed, retrying in 15s" >&2; sleep 15
+          done
+
+      # Verify the way an installed machine will: the committed public key, no
+      # transparency log. If this fails, the pushed image is unpullable, so
+      # catching it here beats finding out at `bootc upgrade`.
+      - name: Verify signature
+        if: github.event_name != 'pull_request'
+        env:
+          REF: ${{ steps.push.outputs.image }}@${{ steps.push.outputs.digest }}
+        run: cosign verify --key keys/cosign.pub --insecure-ignore-tlog=true "$REF"
+
+      # A version is only ever considered when it HAS tags and EVERY one of
+      # them starts with build-, which makes it impossible to delete something
+      # a machine follows even if a promoted digest also carries its build tag.
+      #
+      # Best effort on purpose: deleting package versions needs the package to
+      # grant this repository the Admin role (package settings, Manage Actions
+      # access), and tidying up must never fail a build that otherwise
+      # succeeded.
+      - name: Collect old builds
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEEP: "10"
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          api="/users/${owner}/packages/container/${IMAGE_NAME}/versions"
+          gh api --paginate "$api" > "${RUNNER_TEMP}/versions.json"
+          jq -r --argjson keep "$KEEP" '
+            map(select((.metadata.container.tags | length) > 0
+                        and (.metadata.container.tags | all(startswith("build-")))))
+            | sort_by(.created_at) | reverse | .[$keep:][]
+            | "\(.id) \(.metadata.container.tags | join(","))"
+          ' "${RUNNER_TEMP}/versions.json" > "${RUNNER_TEMP}/collect.txt"
+          echo "collectable: $(wc -l < "${RUNNER_TEMP}/collect.txt")"
+          while read -r id tags; do
+            [ -n "${id:-}" ] || continue
+            echo "deleting ${tags} (${id})"
+            gh api -X DELETE "${api}/${id}" >/dev/null || echo "  could not delete ${id}"
+          done < "${RUNNER_TEMP}/collect.txt"
+
+      # Which disk filled, and what was on it. The build is the only thing here
+      # big enough to run out of space, and this is the only record of it.
+      - name: Disk usage on failure
+        if: failure()
+        run: |
+          df -h / || true
+          du -sh out kernel 2>/dev/null || true
+          du -sh "$(podman info --format '{{.Store.GraphRoot}}')" 2>/dev/null || true
+          podman images --format '{{.Repository}}:{{.Tag}} {{.Size}}' || true
+
+      - name: Summary
+        if: github.event_name != 'pull_request'
+        env:
+          VARIANT: ${{ matrix.variant }}
+          IMAGE: ${{ steps.push.outputs.image }}
+          TAGS: ${{ steps.tags.outputs.tags }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          {
+            echo "### ${VARIANT}"
+            echo '```'
+            echo "${IMAGE}:${TAGS}"
+            echo "${IMAGE}@${DIGEST}"
+            echo '```'
+            echo "Install this build:"
+            echo '```'
+            echo "sudo bootc switch ${IMAGE}:${TAGS}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,29 @@
+# Ban hosts that repeatedly fail to log in.
+#
+# Both services this image exposes accept passwords, which is what makes them
+# worth guarding: SSH by choice (see sshd_config.d/10-fedora-bootc.conf) and
+# XRDP by design, since the RDP login IS the session login.
+#
+# For SSH this adds to OpenSSH 9.8+'s own PerSourcePenalties (capped at ten
+# minutes): a ban at the firewall, for an hour. XRDP has no equivalent, so
+# there the jail is the whole protection.
+
+[DEFAULT]
+# These services log to the journal, not /var/log/secure.
+backend = systemd
+
+bantime  = 1h
+findtime = 10m
+maxretry = 5
+
+# Never lock yourself out of the machine you are sitting at.
+ignoreip = 127.0.0.1/8 ::1
+
+[sshd]
+enabled = true
+
+[xrdp]
+enabled  = true
+filter   = xrdp
+port     = 3389
+protocol = tcp

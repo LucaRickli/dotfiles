@@ -1,0 +1,12 @@
+# Desktop apps, from Flathub. Not part of the image: install them per machine
+# after cloning this repo (fish or bash):
+#
+#   flatpak install -y flathub $(grep -vE '^\s*(#|$)' packages/flatpaks.txt)
+#
+# One app ID per line, nothing after it. Bazaar is the GUI for everything else.
+# Remote Desktop Manager is not on Flathub; the image ships Devolutions' remote:
+#   flatpak install devolutions com.devolutions.remotedesktopmanager
+io.github.kolunmi.Bazaar
+org.mozilla.firefox
+com.visualstudio.code
+org.remmina.Remmina

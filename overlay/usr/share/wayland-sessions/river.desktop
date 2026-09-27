@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=River
+Comment=Dynamic tiling Wayland compositor, with the Noctalia shell
+Exec=river-session
+Type=Application
+DesktopNames=river
+Keywords=wayland;compositor;wlroots;tiling;

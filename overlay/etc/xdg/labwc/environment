@@ -1,0 +1,9 @@
+# Environment for labwc sessions.
+#
+# labwc reads its keyboard layout from XKB variables, not from
+# /etc/X11/xorg.conf.d. The live ISO runs the installer under labwc too, and
+# the LUKS passphrase typed there must match the layout the initramfs uses.
+XKB_DEFAULT_LAYOUT=ch
+# The default Super+Return runs lab-sensible-terminal, which uses $TERMINAL
+# and otherwise the first terminal on its own list (ghostty is not on it).
+TERMINAL=ghostty

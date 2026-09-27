@@ -1,0 +1,20 @@
+#!/bin/sh
+#
+# The image's river init, run by river-session when the user has no
+# ~/.config/river/init of their own. river (the river-classic package) has no
+# system-wide init location and starts with NO keybindings at all without one,
+# so this is what makes a fresh river session usable.
+
+# The packaged example is a complete baseline: keybindings, media keys, tag
+# handling, and the rivertile layout. Running it rather than copying it means
+# package updates to it keep arriving.
+/usr/share/river/init.example
+
+# The example binds Super+Shift+Return to foot; ghostty is the image's
+# terminal. riverctl overwrites a mapping when the combo is bound again.
+riverctl map normal Super+Shift Return spawn ghostty
+
+# The Noctalia shell (bar, launcher, notifications, polkit agent) and a
+# Secret Service, same as the labwc autostart.
+noctalia &
+/usr/bin/gnome-keyring-daemon --start --components=secrets &

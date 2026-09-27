@@ -1,0 +1,13 @@
+# Kernel arguments for the NVIDIA variant, sealed into its UKI along with the
+# rest of kargs.d by `bootc container ukify` (build_files/uki.sh).
+#
+# The blacklist string must be exactly "nouveau,nova_core": RPM Fusion's
+# nvidia-fallback.service matches it verbatim (it loads nouveau if the
+# proprietary module fails to load, e.g. unsigned module under Secure Boot).
+kargs = [
+  "rd.driver.blacklist=nouveau,nova_core",
+  "modprobe.blacklist=nouveau,nova_core",
+  "nvidia_drm.modeset=1",
+  "nvidia_drm.fbdev=1",
+]
+match-architectures = ["x86_64"]

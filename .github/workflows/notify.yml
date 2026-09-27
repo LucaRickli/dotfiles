@@ -1,0 +1,89 @@
+# Tell the owner when something on main breaks, because GitHub will not.
+#
+# GitHub emails a failed run only to whoever triggered it. Here that is mostly
+# Renovate (its automerge is the push that builds) or the schedule (release,
+# devcontainer), so a broken main would go unnoticed. Instead, a failed run on
+# main opens an issue assigned to the repository owner, a second failure of
+# the same workflow comments on that issue instead of opening another, and the
+# next successful run closes it. One issue per workflow, labelled ci-failure.
+#
+# Pull requests are left out on purpose: a Renovate PR whose checks fail is
+# assigned to the owner by Renovate itself (renovate.json, assignees), and a
+# PR anyone else opens is theirs to look at.
+#
+# workflow_run fires in this repository's own context (default branch, write
+# token) no matter what triggered the watched run, so nothing from that run is
+# checked out or executed here: it only reads the run's metadata.
+name: notify
+
+on:
+  workflow_run:
+    # By `name:`. Only what runs unattended; cleanup is started by hand, and
+    # GitHub already tells whoever started it.
+    workflows: [build, check, devcontainer, release, ci]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  issues: write
+
+# One writer per workflow, so two quick failures cannot both open an issue.
+concurrency:
+  group: notify-${{ github.event.workflow_run.name }}
+  cancel-in-progress: false
+
+jobs:
+  issue:
+    # `branches: [main]` matches the head branch NAME, which a fork's pull
+    # request can share, so the event and the repository are checked too.
+    if: >-
+      github.event.workflow_run.event != 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Open, update or close the ci-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          EVENT: ${{ github.event.workflow_run.event }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          label=ci-failure
+          title="CI failing on main: ${WORKFLOW}"
+          open=$(gh issue list --state open --label "$label" --limit 100 --json number,title \
+                   | jq -r --arg t "$title" '[.[] | select(.title == $t)][0].number // empty')
+
+          case "$CONCLUSION" in
+            failure|timed_out|startup_failure)
+              if [ -n "$open" ]; then
+                gh issue comment "$open" --body "Failed again (${EVENT}, ${SHA:0:7}): ${RUN_URL}"
+                exit 0
+              fi
+              gh label create "$label" --color B60205 \
+                --description "A workflow on main is failing (notify.yml)" --force >/dev/null
+              body="The \`${WORKFLOW}\` workflow failed on main (${EVENT}, ${SHA:0:7}):
+          ${RUN_URL}
+
+          This issue closes itself on the next successful \`${WORKFLOW}\` run."
+              # Assigning is what sends the notification. An owner that is an
+              # organisation cannot be assigned, so fall back to a plain issue.
+              gh issue create --title "$title" --label "$label" --assignee "$OWNER" --body "$body" ||
+                gh issue create --title "$title" --label "$label" --body "$body"
+              ;;
+            success)
+              if [ -n "$open" ]; then
+                gh issue close "$open" --comment "Fixed: ${RUN_URL} (${EVENT}, ${SHA:0:7}) succeeded."
+              fi
+              ;;
+            *)
+              # cancelled (a newer push superseded it), skipped, neutral: says
+              # nothing about whether main works.
+              echo "conclusion ${CONCLUSION}: nothing to do"
+              ;;
+          esac

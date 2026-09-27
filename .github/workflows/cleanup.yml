@@ -1,0 +1,92 @@
+# Delete this repo's GitHub Actions caches on demand.
+#
+# The pipeline's one big cached thing is `bm-bundle-<hash of binary.yaml>` (the
+# verified release binaries build.yml hands to the image build). GitHub scopes
+# caches by git ref, so a tag-scoped release run (release: published) cannot
+# reuse main's cache and writes its own copy under refs/tags/<version>; over
+# time those duplicates (~270 MB each) pile up alongside main's.
+#
+# Deleting a cache only costs one slower build (the bm job re-fetches). Scope
+# is deliberately just Actions caches; it does NOT touch GHCR images
+# (build.yml keeps the newest ten).
+name: cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      key_prefix:
+        description: "Only delete caches whose key starts with this (empty = all caches)"
+        required: false
+        default: "bm-bundle-"
+        type: string
+      dry_run:
+        description: "List what would be deleted without deleting it"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: cleanup-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  caches:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - name: Delete Actions caches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PREFIX: ${{ inputs.key_prefix }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+
+          # One "id<TAB>key<TAB>ref<TAB>size" row per cache across all pages.
+          # `|| true` so an empty list does not trip `set -e` on the pipe.
+          gh api --paginate "repos/${REPO}/actions/caches" \
+            --jq '.actions_caches[] | [.id, .key, .ref, .size_in_bytes] | @tsv' \
+            > /tmp/caches.tsv || true
+
+          total=0 hit=0 deleted=0 freed=0
+          while IFS=$(printf '\t') read -r id key ref size; do
+            [ -n "${id:-}" ] || continue
+            total=$((total + 1))
+            # Prefix filter: empty prefix matches every cache.
+            case "$key" in
+              "${PREFIX}"*) : ;;
+              *) continue ;;
+            esac
+            hit=$((hit + 1))
+            mib=$(( ${size:-0} / 1024 / 1024 ))
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "would delete: ${key} (${mib} MiB) on ${ref} [id ${id}]"
+              freed=$((freed + mib))
+              continue
+            fi
+            echo "deleting: ${key} (${mib} MiB) on ${ref} [id ${id}]"
+            if gh api -X DELETE "repos/${REPO}/actions/caches/${id}" >/dev/null; then
+              deleted=$((deleted + 1)); freed=$((freed + mib))
+            else
+              echo "  could not delete ${id} (already gone?)"
+            fi
+          done < /tmp/caches.tsv
+
+          {
+            echo "### Cache cleanup"
+            echo "- prefix filter: \`${PREFIX:-<all>}\`"
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "- dry run: **${hit}** of ${total} cache(s), ~${freed} MiB, would be deleted"
+            else
+              echo "- deleted **${deleted}** of ${hit} matched (${total} total), ~${freed} MiB"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

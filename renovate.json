@@ -2,11 +2,240 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended",
-    "github>lucarickli/dotfiles//.renovate/customManagers.json",
-    "github>lucarickli/dotfiles//.renovate/lables.json",
     ":disableRateLimiting",
     ":dependencyDashboard",
     ":semanticCommits",
-    ":timezone(Europe/Zurich)"
+    ":timezone(Europe/Zurich)",
+    "helpers:pinGitHubActionDigests",
+    "schedule:weekends"
+  ],
+  "automerge": true,
+  "automergeType": "pr",
+  "platformAutomerge": true,
+  "assignees": [
+    "lucarickli"
+  ],
+  "reviewers": [
+    "lucarickli"
+  ],
+  "packageRules": [
+    {
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "labels": [
+        "update/major"
+      ]
+    },
+    {
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "labels": [
+        "update/minor"
+      ]
+    },
+    {
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "labels": [
+        "update/patch"
+      ]
+    },
+    {
+      "matchUpdateTypes": [
+        "digest",
+        "pinDigest"
+      ],
+      "labels": [
+        "update/digest"
+      ]
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "addLabels": [
+        "renovate/github-action"
+      ]
+    },
+    {
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "addLabels": [
+        "renovate/base-image"
+      ]
+    },
+    {
+      "matchDatasources": [
+        "github-releases"
+      ],
+      "addLabels": [
+        "renovate/github-release"
+      ]
+    },
+    {
+      "description": "Everything that automerges goes into ONE weekly PR: one full image build per week instead of one per dependency, and no rebase-and-rebuild cascade when one of many PRs merges. The Monday release ships it",
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "weekly updates",
+      "groupSlug": "weekly"
+    },
+    {
+      "description": "Every action is pinned to a commit for an exact version tag, so a digest update of one means that tag was moved to a different commit, which is what a hijacked action looks like (tj-actions/changed-files, 2025). Never automerged, never mixed into the weekly PR (one non-automerge update would hold the whole group), opened at once",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "digest"
+      ],
+      "groupName": "moved GitHub action tags",
+      "groupSlug": "action-retag",
+      "automerge": false,
+      "schedule": [
+        "at any time"
+      ],
+      "addLabels": [
+        "security"
+      ]
+    },
+    {
+      "description": "Automerged updates wait 3 days after their release, so a broken or pulled release is usually gone before it is merged. Only for datasources that report release times: without one (e.g. the chunkah digest on quay.io) Renovate would hold the update forever",
+      "matchDatasources": [
+        "github-releases",
+        "github-tags",
+        "npm",
+        "go",
+        "golang-version"
+      ],
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Majors (and replacements) are never automerged: their own PR, CI runs on it, and it waits for the owner (assigned and asked for review) to merge it",
+      "matchUpdateTypes": [
+        "major",
+        "replacement"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Fedora base images are not managed as docker tags: the registries carry the next release (branched) and rawhide as plain numbers long before they are released, so a docker lookup would propose rawhide. The 'fedora' custom manager below follows released Fedora versions instead",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "matchPackageNames": [
+        "quay.io/fedora/fedora-bootc",
+        "registry.fedoraproject.org/fedora-minimal",
+        "registry.fedoraproject.org/fedora-toolbox"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "The move to the next Fedora release: every pin in one PR, opened as soon as endoflife.date lists the release (i.e. once it is out, not on the weekend after), never automerged",
+      "matchDatasources": [
+        "endoflife-date"
+      ],
+      "matchPackageNames": [
+        "fedora"
+      ],
+      "groupName": "Fedora",
+      "groupSlug": "fedora",
+      "automerge": false,
+      "commitMessageTopic": "Fedora",
+      "addLabels": [
+        "renovate/fedora"
+      ],
+      "schedule": [
+        "at any time"
+      ]
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Fedora release the images are built on: the base image tags (Containerfiles, Justfile) and the release named in the README",
+      "managerFilePatterns": [
+        "/^Containerfile$/",
+        "/^devcontainer/Containerfile$/",
+        "/^Justfile$/",
+        "/^README\\.md$/"
+      ],
+      "matchStrings": [
+        "(?:quay\\.io/fedora/fedora-bootc|registry\\.fedoraproject\\.org/fedora-minimal|registry\\.fedoraproject\\.org/fedora-toolbox):(?<currentValue>\\d+)\\b",
+        "A personal Fedora (?<currentValue>\\d+) desktop"
+      ],
+      "depNameTemplate": "fedora",
+      "datasourceTemplate": "endoflife-date",
+      "versioningTemplate": "loose"
+    },
+    {
+      "customType": "regex",
+      "description": "Versions in workflow files under a '# renovate: datasource=... depName=...' comment (cosign-release, tool versions)",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/[^/]+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+[A-Za-z0-9_-]+: \"?(?<currentValue>[^\"\\s]+)\"?"
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "GitHub releases pinned in packages/binary.yaml (bm)",
+      "managerFilePatterns": [
+        "/^packages/binary\\.yaml$/"
+      ],
+      "matchStrings": [
+        "https:\\/\\/github.com\\/(?<depName>\\S+?\\/\\S+?)\\/releases\\/download\\/(?<currentValue>(v|\\d)\\S+?)\\/\\S+"
+      ],
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver",
+      "extractVersionTemplate": "^(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Helm CDN",
+      "managerFilePatterns": [
+        "/^packages/binary\\.yaml$/"
+      ],
+      "matchStrings": [
+        "https:\\/\\/get\\.helm\\.sh\\/helm-v(?<currentValue>[^-]+)-linux-amd64\\.tar\\.gz"
+      ],
+      "depNameTemplate": "helm/helm",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver",
+      "autoReplaceStringTemplate": "https://get.helm.sh/helm-v{{{newValue}}}-linux-amd64.tar.gz"
+    },
+    {
+      "customType": "regex",
+      "description": "kubectl CDN",
+      "managerFilePatterns": [
+        "/^packages/binary\\.yaml$/"
+      ],
+      "matchStrings": [
+        "https:\\/\\/dl\\.k8s\\.io\\/release\\/v(?<currentValue>[^\\/]+)\\/bin\\/linux\\/amd64\\/kubectl"
+      ],
+      "depNameTemplate": "kubernetes/kubernetes",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver",
+      "autoReplaceStringTemplate": "https://dl.k8s.io/release/v{{{newValue}}}/bin/linux/amd64/kubectl"
+    },
+    {
+      "customType": "regex",
+      "description": "Tool versions in devcontainer/Containerfile: ARG lines under a '# renovate:' comment",
+      "managerFilePatterns": [
+        "/^devcontainer/Containerfile$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\s+ARG [A-Z0-9_]+=(?<currentValue>\\S+)"
+      ],
+      "extractVersionTemplate": "{{#if extractVersion}}{{{extractVersion}}}{{else}}^(?<version>.+)${{/if}}"
+    }
   ]
 }
