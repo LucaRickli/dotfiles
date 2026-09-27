@@ -13,3 +13,5 @@ secrets.*
 secret.*
 id_*
 
+**/completions/copilot.fish
+**/fastfetch/themes/noctalia.jsonc
