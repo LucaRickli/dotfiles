@@ -199,11 +199,12 @@ jobs:
     needs: changes
     if: needs.changes.outputs.image == 'true'
     uses: ./.github/workflows/build.yml
-    # What build.yml's jobs ask for. On a pull request nothing is pushed; fork
-    # PRs get a read-only token whatever is granted here.
+    # What build.yml's jobs ask for. On a pull request nothing is pushed or
+    # uploaded; fork PRs get a read-only token whatever is granted here.
     permissions:
       contents: read
       packages: write
+      security-events: write
 
   dotfiles:
     needs: changes
@@ -219,6 +220,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write
 
   # The publishing half of build.yml and release.yml, which a pull request
   # never reaches (nothing is pushed or signed there): the same registry
@@ -350,6 +352,7 @@ jobs:
         uses: ./.github/actions/scan-image
         with:
           image: localhost/fedora-bootc:live
+          name: live
           upstream-paths: var/lib/flatpak/
 
       - name: Disk usage on failure

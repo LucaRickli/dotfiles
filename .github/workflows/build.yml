@@ -175,6 +175,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write   # scan results to code scanning (scan-image)
     outputs:
       ref: ${{ steps.push.outputs.ref }}
     steps:
@@ -233,6 +234,7 @@ jobs:
         uses: ./.github/actions/scan-image
         with:
           image: ${{ env.IMAGE_NAME }}:base
+          name: latest
 
       - name: Login to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -291,6 +293,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write   # scan results to code scanning (scan-image)
     strategy:
       fail-fast: false
       matrix:
@@ -489,6 +492,7 @@ jobs:
         uses: ./.github/actions/scan-image
         with:
           image: ${{ env.IMAGE_NAME }}:nvidia-plain
+          name: nvidia
 
       - name: Push the unsealed NVIDIA variant
         if: github.event_name != 'pull_request' && matrix.variant == 'nvidia'
@@ -518,6 +522,7 @@ jobs:
         uses: ./.github/actions/scan-image
         with:
           image: ${{ env.IMAGE_NAME }}:${{ matrix.tag }}
+          name: ${{ matrix.tag }}-uki
 
       # One tag, named after the commit, so a build is identifiable, immutable
       # and collides with nothing. Nothing else is written from here.

@@ -5,6 +5,11 @@
 # the same way (a pending Fedora update only warns there), so the PR is
 # blocked instead of the push after merging.
 #
+# What needs action also becomes code scanning alerts (Security tab), one
+# category per image, so an alert closes when a later build of that image no
+# longer has it. Not from pull requests: a fork's token cannot upload, and
+# the gate above already reports there.
+#
 # trivy is the release packages/binary.yaml pins for the image (Renovate bumps
 # it with the rest), verified by bm, so this action has no download or pin of
 # its own for it. It comes out of the bm bundle the `bm` job in build.yml
@@ -16,6 +21,11 @@ description: Fail on secrets and critical vulnerabilities in a local image
 inputs:
   image:
     description: the local image to scan (rootless podman storage)
+    required: true
+  name:
+    description: >-
+      What the image is published as (latest, latest-uki, nvidia, live,
+      devcontainer, ...): the code scanning category, one per image
     required: true
   upstream-paths:
     description: >-
@@ -88,12 +98,46 @@ runs:
         "$bin/trivy" --version | head -1
         echo "path=$bin/trivy" >> "$GITHUB_OUTPUT"
 
+    # Fails only when the scan itself could not finish. A verdict of "fail"
+    # is acted on at the end, after the upload, so the alerts show what
+    # stopped the push.
     - name: Scan
+      id: scan
       shell: bash
       env:
         TRIVY: ${{ steps.trivy.outputs.path }}
         IMAGE: ${{ inputs.image }}
+        NAME: ${{ inputs.name }}
         UPSTREAM: ${{ inputs.upstream-paths }}
         EVENT: ${{ github.event_name }}
       run: |
-        "${GITHUB_ACTION_PATH}/scan.sh" "$IMAGE"
+        set -euo pipefail
+        out="${RUNNER_TEMP}/scan-image-${NAME}"
+        rm -f "$out.sarif" "$out.result"
+        SARIF="$out.sarif" RESULT="$out.result" "${GITHUB_ACTION_PATH}/scan.sh" "$IMAGE" || true
+        result=$(cat "$out.result" 2>/dev/null || true)
+        case "$result" in
+          pass|fail) ;;
+          *) echo "::error::the scan of $IMAGE did not complete"; exit 1 ;;
+        esac
+        echo "result=$result" >> "$GITHUB_OUTPUT"
+        echo "sarif=$out.sarif" >> "$GITHUB_OUTPUT"
+
+    # Reporting must never be what fails a build, hence continue-on-error; a
+    # failed upload leaves the alerts at the previous build's state.
+    - name: Upload to code scanning
+      if: github.event_name != 'pull_request'
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+      with:
+        sarif_file: ${{ steps.scan.outputs.sarif }}
+        category: image:${{ inputs.name }}
+
+    - name: Verdict
+      if: steps.scan.outputs.result == 'fail'
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+      run: |
+        echo "::error::$IMAGE must not be pushed; the step summary has what the scan found"
+        exit 1

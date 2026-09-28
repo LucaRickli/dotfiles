@@ -125,6 +125,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write
 
   iso:
     needs: [plan, images]
@@ -134,6 +135,7 @@ jobs:
     permissions:
       contents: write   # the release and its tag
       packages: write   # the live image, and moving the promoted tags
+      security-events: write   # scan results to code scanning (scan-image)
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -186,6 +188,7 @@ jobs:
         uses: ./.github/actions/scan-image
         with:
           image: ${{ env.IMAGE_NAME }}:live
+          name: live
           upstream-paths: var/lib/flatpak/
 
       - name: Login to GHCR

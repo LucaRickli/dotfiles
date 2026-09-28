@@ -8,7 +8,9 @@
 #       .github/actions/scan-image/scan.sh localhost/devcontainer:latest
 #
 # Needs rootless podman, jq and yq (either flavour), and trivy on PATH or in
-# $TRIVY.
+# $TRIVY. Optional outputs, for action.yml: $SARIF, the findings that need
+# action as a code scanning report (sarif.jq); $RESULT, "pass" or "fail",
+# written only when the scan completed.
 #
 # Fails on what must not be published:
 #   - a secret anywhere in the image (trivy's rules plus trivy-secret.yaml)
@@ -195,8 +197,17 @@ fi
     echo
 } >> "$summary"
 
+if [ -n "${SARIF:-}" ]; then
+    jq -n --rawfile secrets "$work/secrets.tsv" --rawfile vulns "$work/classified.tsv" \
+        --slurpfile adv "$work/advisories.json" \
+        --arg repo "${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-lucarickli/dotfiles}" \
+        -f "$here/sarif.jq" > "$SARIF"
+fi
+
 if [ "${#failures[@]}" != 0 ]; then
     for f in "${failures[@]}"; do echo "::error::$image: $f"; done
+    if [ -n "${RESULT:-}" ]; then echo fail > "$RESULT"; fi
     exit 1
 fi
+if [ -n "${RESULT:-}" ]; then echo pass > "$RESULT"; fi
 echo "$image: nothing that blocks a push"

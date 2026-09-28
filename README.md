@@ -158,7 +158,10 @@ Every image is scanned right before it is pushed, and on pull requests
   from an RPM and not an upstream release it pins (trivy).
 
 The run summary counts the rest and lists pending important Fedora updates;
-the job log has every trivy finding. Locally:
+the job log has every trivy finding. What needs action (secrets, pending
+critical and important Fedora updates, high and critical vulnerabilities in
+the image's own files) is also in the Security tab as code scanning alerts,
+one category per image, which close once a build no longer has them. Locally:
 `.github/actions/scan-image/scan.sh localhost/fedora-bootc:latest`.
 
 ## Development container
