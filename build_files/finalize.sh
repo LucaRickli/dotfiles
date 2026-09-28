@@ -258,6 +258,17 @@ test -x /usr/bin/xdpyinfo
 rpm -q xrdp-selinux >/dev/null
 semodule -l | grep -qx xrdp
 firewall-offline-cmd --query-service=rdp
+# No xrdp keys in the image (build.sh deletes what its %posttrans made); every
+# machine makes its own, and xrdp does not start without them (Requires=).
+test ! -e /etc/xrdp/key.pem
+test ! -e /etc/xrdp/cert.pem
+test ! -e /etc/xrdp/rsakeys.ini
+test -x /usr/libexec/fedora-bootc/xrdp-keygen
+grep -qx 'ExecStart=/usr/libexec/fedora-bootc/xrdp-keygen' /usr/lib/systemd/system/xrdp-keygen.service
+grep -qx 'Requires=xrdp-keygen.service' /usr/lib/systemd/system/xrdp.service.d/10-keygen.conf
+grep -qx 'After=xrdp-keygen.service' /usr/lib/systemd/system/xrdp.service.d/10-keygen.conf
+test -x /usr/bin/xrdp-keygen
+test -s /etc/xrdp/openssl.conf
 
 # SSH: password auth for non-root accounts, with a pre-auth legal notice.
 # Asked of sshd rather than grepped, because drop-ins are first-match-wins and
@@ -272,6 +283,15 @@ grep -qx 'permitemptypasswords no' <<<"$sshd_effective"
 grep -qx 'banner /usr/share/fedora-bootc/ssh-banner' <<<"$sshd_effective"
 test -s /usr/share/fedora-bootc/ssh-banner
 rm -f /tmp/sshd-check /tmp/sshd-check.pub
+
+# No private key where packages and build steps leave per-machine state: a
+# scriptlet that generates one at install time ships it to every machine (the
+# xrdp keys above were exactly that). PEM keys of any kind, plus the private
+# exponent in xrdp's own rsakeys.ini format, which is not PEM. CI scans the
+# whole image with trivy as well before pushing it (.github/actions/scan-image).
+keys=$(grep -rlsIE -e '-----BEGIN ([A-Z0-9]+ )*PRIVATE KEY-----' -e '^pri_exp=' \
+    /etc /var /root /opt /usr/local || true)
+test -z "$keys" || { printf 'private key in the image:\n%s\n' "$keys" >&2; exit 1; }
 
 # fail2ban parses its own config, and our xrdp filter still matches what
 # xrdp-sesexec logs ("AUTHFAIL: user=%s ip=%s time=%d"); a filter that matches

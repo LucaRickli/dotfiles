@@ -117,7 +117,7 @@ devcontainer:
 check:
     build_files/validate-configs.sh home/.config
     # one at a time: `bash -n a.sh b.sh` parses only a.sh (b.sh becomes $1)
-    for f in build_files/*.sh nvidia/nvidia.sh live/*.sh dev/*.sh; do bash -n "$f"; done
+    for f in build_files/*.sh nvidia/nvidia.sh live/*.sh dev/*.sh .github/actions/*/*.sh overlay/usr/libexec/fedora-bootc/xrdp-keygen; do bash -n "$f"; done
     sh -n dotfiles.sh
 
 # Validate the dotfiles inside the built image (the image has all the tools)

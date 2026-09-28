@@ -1,0 +1,10 @@
+[Unit]
+Description=Generate this machine's XRDP keys
+Documentation=file:///usr/libexec/fedora-bootc/xrdp-keygen
+# Pulled in by xrdp.service (xrdp.service.d/10-keygen.conf), before it reads
+# the keys. No RemainAfterExit: every start of xrdp checks again.
+Before=xrdp.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/fedora-bootc/xrdp-keygen

@@ -1,7 +1,7 @@
 # Build the development container (devcontainer/) and push it to
 # ghcr.io/<owner>/devcontainer as :latest and :<yyyymmdd>. Weekly as well, so
 # the Fedora packages in it stay current without a commit. Pull requests get
-# it through ci.yml, the PR gate, and only build and smoke-test.
+# it through ci.yml, the PR gate, and only build, smoke-test and scan.
 name: devcontainer
 
 on:
@@ -61,6 +61,15 @@ jobs:
             ls ~/.vscode-server/extensions | grep -E "^golang\.go-"
             ls ~/.vscode-server/extensions | grep -E "^denoland\.vscode-deno-"
             ls ~/.vscode-server/extensions | grep -E "^rust-lang\.rust-analyzer-"'
+
+      # Before the push (.github/actions/scan-image). Everything outside
+      # Fedora's packages is a pinned upstream release: the toolchains under
+      # /usr/local and the VS Code extensions.
+      - name: Scan
+        uses: ./.github/actions/scan-image
+        with:
+          image: ${{ env.LOCAL }}
+          upstream-paths: usr/local/ var/home/dev/.vscode-server/
 
       - name: Login to GHCR
         if: github.event_name != 'pull_request'

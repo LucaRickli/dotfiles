@@ -30,6 +30,16 @@ dnf -y install \
     --exclude=wf-shell --exclude=foot --exclude=wmenu \
     $(pkgs "$CTX"/packages/packages.txt) /run/greeter/noctalia-greeter-*.rpm
 
+# --- Keys the packages generated for "this machine" ---------------------------
+# xrdp's %posttrans creates its private keys (the TLS pair key.pem/cert.pem and
+# the RDP-security RSA key rsakeys.ini) when they are missing. Here that is at
+# image build time, so every machine would share one set, published with the
+# image. Deleted in this same RUN, so they never reach a layer; each machine
+# generates its own before xrdp starts (overlay/usr/libexec/fedora-bootc/
+# xrdp-keygen). finalize.sh asserts no private key is left where per-machine
+# state lives; CI's scan covers the whole image (.github/actions/scan-image).
+rm -f /etc/xrdp/key.pem /etc/xrdp/cert.pem /etc/xrdp/rsakeys.ini
+
 # --- Binaries managed by bm (packages/binary.yaml) ---------------------------
 # CI fetches and verifies these in a job of their own (the `bm` job in
 # build.yml) and hands the result in as a /run/bundle.tar volume: release

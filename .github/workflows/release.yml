@@ -150,17 +150,43 @@ jobs:
           # what `just iso` assembles the ISO in
           pull: quay.io/fedora/fedora:latest
 
+      # The ISO is assembled by live/build-iso.sh inside a Fedora container,
+      # so the runner needs nothing but podman and just (not preinstalled).
+      # just itself is pinned too (Renovate bumps it through the PR gate),
+      # instead of whatever release is newest when the release runs.
+      - name: Install just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: "1.58.0"
+
       # No Secure Boot key here on purpose. The live image signs nothing:
       # `--target live` never builds the stages that would need one, and the
       # ISO deliberately ships no shim, so it does not boot under Secure Boot
       # at all (live/prepare-live.sh has the why).
-      # Built here so it can be pushed; `just iso` reuses the same cached
-      # layers to assemble the ISO.
-      - name: Build the live image
+      # `just iso` builds the live image (localhost/fedora-bootc:live) and
+      # assembles the ISO from it. The steps below scan, push and sign that
+      # same image: building it a second time could pick up a newer base and
+      # give the ISO a rootfs nobody scanned.
+      - name: Build the live image and the ISO
+        id: iso
         run: |
-          podman build --pull=newer \
-            --cap-add=sys_admin --security-opt label=disable \
-            --target live -t "${IMAGE_NAME}:live" .
+          set -euo pipefail
+          just iso
+          iso=$(find output -maxdepth 1 -name '*.iso' | head -1)
+          test -n "$iso" || { echo "just iso produced no ISO in output/" >&2; exit 1; }
+          mv "$iso" "${GITHUB_WORKSPACE}/fedora-bootc-live.iso"
+          echo "iso-dest=${GITHUB_WORKSPACE}/fedora-bootc-live.iso" >> "$GITHUB_OUTPUT"
+          df -h /
+
+      # Before the push, like every image, and before the login, so trivy
+      # never runs next to the token (.github/actions/scan-image). The
+      # installer Flatpak (pinned in live/) and its runtime (from Flathub at
+      # build time) are upstream builds.
+      - name: Scan the live image
+        uses: ./.github/actions/scan-image
+        with:
+          image: ${{ env.IMAGE_NAME }}:live
+          upstream-paths: var/lib/flatpak/
 
       - name: Login to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -207,26 +233,6 @@ jobs:
             echo "cosign sign attempt $attempt failed, retrying in 15s" >&2; sleep 15
           done
           cosign verify --key keys/cosign.pub --insecure-ignore-tlog=true "$REF"
-
-      # The ISO is assembled by live/build-iso.sh inside a Fedora container,
-      # so the runner needs nothing but podman and just (not preinstalled).
-      # just itself is pinned too (Renovate bumps it through the PR gate),
-      # instead of whatever release is newest when the release runs.
-      - name: Install just
-        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
-        with:
-          just-version: "1.58.0"
-
-      - name: Build the ISO
-        id: iso
-        run: |
-          set -euo pipefail
-          just iso
-          iso=$(find output -maxdepth 1 -name '*.iso' | head -1)
-          test -n "$iso" || { echo "just iso produced no ISO in output/" >&2; exit 1; }
-          mv "$iso" "${GITHUB_WORKSPACE}/fedora-bootc-live.iso"
-          echo "iso-dest=${GITHUB_WORKSPACE}/fedora-bootc-live.iso" >> "$GITHUB_OUTPUT"
-          df -h /
 
       - name: Checksum and split if needed
         id: assets

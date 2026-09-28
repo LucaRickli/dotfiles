@@ -146,6 +146,21 @@ without anyone involved:
   which closes itself on the next successful run. Runs you start yourself (a
   release published by hand, cleanup) are left to GitHub's own failure email.
 
+## Scanning
+
+Every image is scanned right before it is pushed, and on pull requests
+([`scan-image`](.github/actions/scan-image/scan.sh)). The build fails on:
+
+- any secret in the image (trivy);
+- a critical Fedora security update the image does not contain yet (dnf; a
+  warning on pull requests);
+- a critical vulnerability with a fix in a file the image adds itself, not
+  from an RPM and not an upstream release it pins (trivy).
+
+The run summary counts the rest and lists pending important Fedora updates;
+the job log has every trivy finding. Locally:
+`.github/actions/scan-image/scan.sh localhost/fedora-bootc:latest`.
+
 ## Development container
 
 [`devcontainer/`](devcontainer/Containerfile) builds `ghcr.io/lucarickli/devcontainer`
@@ -191,6 +206,11 @@ picks another (niri needs a GPU). For resizing, enable Remmina's "Dynamic
 resolution update" and "Use initial window size". Sessions log to
 `~/.xrdp-session.log`; details in
 [`overlay/etc/xrdp/startwm.sh`](overlay/etc/xrdp/startwm.sh).
+
+Each machine generates its own XRDP keys before xrdp first starts, so a
+client asks once to trust the certificate. Compare the fingerprint it shows
+with `sudo openssl x509 -noout -fingerprint -sha256 -in /etc/xrdp/cert.pem`
+(`-sha1` for Windows clients).
 
 ## Other defaults
 

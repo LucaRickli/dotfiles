@@ -96,8 +96,14 @@ jobs:
               .github/workflows/ci.yml)
                 image=true; dotfiles=true; devcontainer=true; renovate=true; iso=true ;;
               # used by every job that runs podman
-              .github/actions/*)
+              .github/actions/prepare-runner/*)
                 image=true; dotfiles=true; devcontainer=true; iso=true ;;
+              # scans every image before it is pushed
+              .github/actions/scan-image/*)
+                image=true; devcontainer=true; iso=true ;;
+              # pins trivy, which scans the live image and the dev container too
+              packages/binary.yaml)
+                devcontainer=true; iso=true ;;
             esac
             case "$f" in
               *.md|docs/*|home/*|dotfiles.sh|packages/flatpaks.txt|devcontainer/*|renovate.json|\
@@ -165,7 +171,8 @@ jobs:
         run: |
           set -euo pipefail
           # One at a time: `bash -n a.sh b.sh` parses only a.sh.
-          for f in build_files/*.sh nvidia/nvidia.sh live/*.sh dev/*.sh; do
+          for f in build_files/*.sh nvidia/nvidia.sh live/*.sh dev/*.sh .github/actions/*/*.sh \
+                   overlay/usr/libexec/fedora-bootc/xrdp-keygen; do
             bash -n "$f"
           done
           sh -n dotfiles.sh
@@ -337,6 +344,13 @@ jobs:
           if [ "$size" -ge $((2 * 1024 * 1024 * 1024)) ]; then
             echo "::notice::over GitHub's 2 GiB asset limit; release.yml will split it"
           fi
+
+      # What release.yml checks before pushing the live image.
+      - name: Scan the live image
+        uses: ./.github/actions/scan-image
+        with:
+          image: localhost/fedora-bootc:live
+          upstream-paths: var/lib/flatpak/
 
       - name: Disk usage on failure
         if: failure()

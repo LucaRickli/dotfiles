@@ -21,7 +21,7 @@
 # and ci.yml cover those), on demand, and as the first job of a release. It has
 # no schedule of its own: the weekly release rebuilds on the floating Fedora
 # base, and Renovate's merges (actions, bm binaries, chunkah) trigger a build.
-# Pull requests reach it through ci.yml, the PR gate, and only build.
+# Pull requests reach it through ci.yml, the PR gate, and only build and scan.
 # Images are signed with cosign; unsigned images are unusable, see "Sign image".
 #
 # Runs on GitHub-hosted ubuntu-26.04 runners (rootless podman 5.x). Each job is
@@ -225,6 +225,15 @@ jobs:
           rm -rf "$SB_DIR"
           df -h /
 
+      # Before the push: an image with a secret or a critical vulnerability in
+      # it is never published (.github/actions/scan-image). Also before the
+      # login, and after the build removed the Secure Boot key: trivy is a
+      # third-party binary and never runs next to either.
+      - name: Scan
+        uses: ./.github/actions/scan-image
+        with:
+          image: ${{ env.IMAGE_NAME }}:base
+
       - name: Login to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -389,16 +398,12 @@ jobs:
       # the same reason the base is: kernel in place, installable the ordinary
       # way. It costs little extra, because the sealed build below goes
       # through this very stage and reuses its layers on this runner.
-      - name: Push the unsealed NVIDIA variant
+      - name: Build the unsealed NVIDIA variant
         if: github.event_name != 'pull_request' && matrix.variant == 'nvidia'
         env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
           BASE_REF: ${{ needs.base.outputs.ref }}
         run: |
           set -euo pipefail
-          test -n "$COSIGN_PRIVATE_KEY" || { echo "SIGNING_SECRET is not set"; exit 1; }
-          registry="${IMAGE_REGISTRY,,}"
-          tag="build-${GITHUB_SHA:0:7}-nvidia"
           base_arg=()
           if [ -n "$BASE_REF" ]; then
             base_arg=(--build-arg "OS_BASE=${BASE_REF}")
@@ -408,17 +413,6 @@ jobs:
             --secret "id=secureboot_cert,src=${SB_DIR}/db.pem" \
             "${base_arg[@]}" --target os-nvidia \
             --tag "${IMAGE_NAME}:nvidia-plain" .
-          podman push --retry 5 --retry-delay 15s --digestfile="${RUNNER_TEMP}/plain-digest" \
-            "${IMAGE_NAME}:nvidia-plain" "${registry}/${IMAGE_NAME}:${tag}"
-          ref="${registry}/${IMAGE_NAME}@$(cat "${RUNNER_TEMP}/plain-digest")"
-          for attempt in 1 2 3; do
-            cosign sign -y --new-bundle-format=false --use-signing-config=false \
-              --tlog-upload=false --key env://COSIGN_PRIVATE_KEY "$ref" && break
-            [ "$attempt" = 3 ] && exit 1
-            echo "cosign sign attempt $attempt failed, retrying in 15s" >&2; sleep 15
-          done
-          cosign verify --key keys/cosign.pub --insecure-ignore-tlog=true "$ref"
-          echo "pushed ${registry}/${IMAGE_NAME}:${tag}"
 
       - name: Build image
         env:
@@ -485,6 +479,45 @@ jobs:
           # Dead once phase 2 read it, and the push below needs the room.
           rm -rf out kernel
           df -h /
+
+      # Its own scan: nvidia.sh adds to the base, including a step that puts
+      # the Secure Boot key into the build and removes it again. Scanned and
+      # pushed only here, after "Build image" removed the key from the runner:
+      # trivy is a third-party binary and never runs next to it.
+      - name: Scan the unsealed NVIDIA variant
+        if: github.event_name != 'pull_request' && matrix.variant == 'nvidia'
+        uses: ./.github/actions/scan-image
+        with:
+          image: ${{ env.IMAGE_NAME }}:nvidia-plain
+
+      - name: Push the unsealed NVIDIA variant
+        if: github.event_name != 'pull_request' && matrix.variant == 'nvidia'
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$COSIGN_PRIVATE_KEY" || { echo "SIGNING_SECRET is not set"; exit 1; }
+          registry="${IMAGE_REGISTRY,,}"
+          tag="build-${GITHUB_SHA:0:7}-nvidia"
+          podman push --retry 5 --retry-delay 15s --digestfile="${RUNNER_TEMP}/plain-digest" \
+            "${IMAGE_NAME}:nvidia-plain" "${registry}/${IMAGE_NAME}:${tag}"
+          ref="${registry}/${IMAGE_NAME}@$(cat "${RUNNER_TEMP}/plain-digest")"
+          for attempt in 1 2 3; do
+            cosign sign -y --new-bundle-format=false --use-signing-config=false \
+              --tlog-upload=false --key env://COSIGN_PRIVATE_KEY "$ref" && break
+            [ "$attempt" = 3 ] && exit 1
+            echo "cosign sign attempt $attempt failed, retrying in 15s" >&2; sleep 15
+          done
+          cosign verify --key keys/cosign.pub --insecure-ignore-tlog=true "$ref"
+          echo "pushed ${registry}/${IMAGE_NAME}:${tag}"
+
+      # Pull requests too: they push nothing, but what would stop the push
+      # fails the PR, except a pending Fedora update, which only warns there
+      # (.github/actions/scan-image).
+      - name: Scan
+        uses: ./.github/actions/scan-image
+        with:
+          image: ${{ env.IMAGE_NAME }}:${{ matrix.tag }}
 
       # One tag, named after the commit, so a build is identifiable, immutable
       # and collides with nothing. Nothing else is written from here.
