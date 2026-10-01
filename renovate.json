@@ -90,16 +90,23 @@
       "groupSlug": "weekly"
     },
     {
-      "description": "noctalia-greeter releases get their own PR, automerged the same way, instead of joining the weekly one: it is built from source (Containerfile, greeter stage), and a release that needs a spec change, such as a new build dependency, would otherwise hold every other update in the weekly PR. Costs one more image build in the weeks it moves",
-      "matchPackageNames": [
-        "noctalia-dev/noctalia-greeter"
+      "description": "What features build from source (each feature's build.sh: noctalia-greeter, shimmy) gets a PR of its own per dependency, automerged the same way, instead of joining the weekly one: a release that needs a build change, such as a new build dependency, would otherwise hold every other update in the weekly PR. Costs one more image build in the weeks one moves",
+      "matchFileNames": [
+        "features/*/build.sh"
       ],
       "matchUpdateTypes": [
         "minor",
         "patch"
       ],
-      "groupName": "noctalia-greeter",
-      "groupSlug": "greeter"
+      "groupName": "{{depName}}",
+      "groupSlug": "build-{{depNameSanitized}}"
+    },
+    {
+      "description": "A crates.io pin (features/llm/build.sh) is an exact version: Renovate's default cargo versioning would read 2.6.4 as the range ^2.6.4 and never propose an update",
+      "matchDatasources": [
+        "crate"
+      ],
+      "versioning": "semver"
     },
     {
       "description": "Every action is pinned to a commit for an exact version tag, so a digest update of one means that tag was moved to a different commit, which is what a hijacked action looks like (tj-actions/changed-files, 2025). Never automerged, never mixed into the weekly PR (one non-automerge update would hold the whole group), opened at once",
@@ -127,12 +134,13 @@
         "github-tags",
         "npm",
         "go",
-        "golang-version"
+        "golang-version",
+        "crate"
       ],
       "minimumReleaseAge": "3 days"
     },
     {
-      "description": "The noctalia-greeter pin is a tag plus the commit that gets built (Containerfile, greeter stage). A new commit for the same tag means upstream moved the tag: never automerged, never in the weekly PR, and opened at once (so after the 3-day rule above, which it lifts: a re-created tag is 0 days old)",
+      "description": "The noctalia-greeter pin is a tag plus the commit that gets built (features/login/build.sh). A new commit for the same tag means upstream moved the tag: never automerged, never in the weekly PR, and opened at once (so after the 3-day rule above, which it lifts: a re-created tag is 0 days old)",
       "matchPackageNames": [
         "noctalia-dev/noctalia-greeter"
       ],
@@ -232,25 +240,16 @@
     },
     {
       "customType": "regex",
-      "description": "Versions in the dev container's Containerfile (ARG lines) and the Flatpak's build script (VAR=value lines) under a '# renovate:' comment",
+      "description": "Versions under a '# renovate:' comment in the dev container's Containerfile (ARG lines) and in the Flatpak's and the features' build scripts (VAR=value lines); where a build pins a commit (noctalia-greeter), NAME_COMMIT on the next line is bumped together with the version",
       "managerFilePatterns": [
         "/^devtools/Containerfile$/",
-        "/^devtools/flatpak/build\\.sh$/"
+        "/^devtools/flatpak/build\\.sh$/",
+        "/^features/[^/]+/build\\.sh$/"
       ],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\s+(?:ARG )?[A-Z0-9_]+=(?<currentValue>\\S+)"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\s+(?:ARG )?[A-Z0-9_]+=(?<currentValue>\\S+)(?:\\s+[A-Z0-9_]+_COMMIT=(?<currentDigest>[0-9a-f]{40})\\b)?"
       ],
       "extractVersionTemplate": "{{#if extractVersion}}{{{extractVersion}}}{{else}}^(?<version>.+)${{/if}}"
-    },
-    {
-      "customType": "regex",
-      "description": "noctalia-greeter in the Containerfile's greeter stage: the upstream tag (ARG under a '# renovate:' comment) and, on the next ARG line, the commit it points at, bumped together",
-      "managerFilePatterns": [
-        "/^Containerfile$/"
-      ],
-      "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+ARG [A-Z0-9_]+=(?<currentValue>\\S+)\\s+ARG [A-Z0-9_]+=(?<currentDigest>[0-9a-f]{40})\\b"
-      ]
     }
   ]
 }

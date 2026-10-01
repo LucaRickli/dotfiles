@@ -1,0 +1,37 @@
+packages:
+  # Noctalia shell (pulls in quickshell). Also the polkit authentication agent
+  # for every session.
+  - noctalia
+  - matugen
+  - cliphist
+  - wl-clipboard
+  - brightnessctl
+  - qt6-qtmultimedia
+  # Portals: -wlr for screencast/screenshot on the wlroots compositors, -gtk for
+  # file choosers. niri uses xdg-desktop-portal-gnome (its weak dependency) for
+  # screencasting.
+  - xdg-desktop-portal-wlr
+  - xdg-desktop-portal-gtk
+
+  # polkit: pkexec, the install wizard's fisherman helper and Noctalia's polkit
+  # agent all need it.
+  - polkit
+  - dconf
+  - nautilus
+  - gnome-text-editor
+  # Settings GUI for network, bluetooth and printers.
+  - gnome-control-center
+  # Secret Service (VS Code and browsers expect one), unlocked at login: the
+  # greetd PAM stack has an optional pam_gnome_keyring line, and the xrdp setup
+  # adds one to the XRDP stack. The PAM module is the -pam subpackage.
+  - gnome-keyring
+  - gnome-keyring-pam
+
+  # Audio
+  - pipewire
+  - pipewire-alsa
+  - pipewire-pulseaudio
+  - pipewire-jack-audio-connection-kit
+  - pipewire-utils
+  - wireplumber
+  - playerctl

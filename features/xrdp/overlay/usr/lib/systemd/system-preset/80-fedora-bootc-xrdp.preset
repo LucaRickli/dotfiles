@@ -1,0 +1,4 @@
+# Remote desktop on 3389. xrdp is the RDP front end, xrdp-sesman authenticates
+# and starts the session (etc/xrdp/startwm.sh).
+enable xrdp.service
+enable xrdp-sesman.service

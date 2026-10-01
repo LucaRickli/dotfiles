@@ -1,0 +1,5 @@
+# Installed, deliberately not enabled (not every machine should join the
+# tailnet). Per machine:
+#   sudo systemctl enable --now tailscaled && sudo tailscale up
+packages:
+  - tailscale

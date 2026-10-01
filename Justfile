@@ -20,7 +20,7 @@ _need-keys:
     @test -f keys/db/db.key || { echo "No Secure Boot keys. Run 'just keygen' first (see keys/README.md)."; exit 1; }
 
 # The public half is committed and baked into the image, which verifies its
-# own updates against it (overlay/etc/containers/policy.json). Empty password,
+# own updates against it (features/updates/overlay/etc/containers/policy.json). Empty password,
 # because CI passes the key by environment variable.
 #
 # Generate the cosign image-signing key pair into keys/ (once)
@@ -70,7 +70,7 @@ _build tag args="": _need-keys
 # Build the OS image (rootless podman; systemd-boot + sealed UKI signed with keys/).
 build: (_build tag)
 
-# NVIDIA variant, localhost/fedora-bootc:nvidia (kmod: open | closed, see nvidia/nvidia.sh)
+# NVIDIA variant, localhost/fedora-bootc:nvidia (kmod: open | closed, see features/nvidia/pre-install.sh)
 build-nvidia kmod="open": (_build "nvidia" ("--build-arg SEAL=os-nvidia --build-arg NVIDIA_KMOD=" + kmod))
 
 # What both sealed variants are built from, with its kernel still in place, so
@@ -142,11 +142,18 @@ flatpak-install:
 # none of them.
 #
 # Validate the dotfiles + scripts on the host, without building
-check:
+check: check-syntax
     scripts/check-dotfiles.sh home/.config
+
+# CI's lint job runs this one as it is (needs only bash, yq and jq).
+#
+# Check every script's syntax and how the features fit together
+check-syntax:
     # one at a time: `bash -n a.sh b.sh` parses only a.sh (b.sh becomes $1)
-    for f in image/*.sh nvidia/nvidia.sh installer/*.sh scripts/*.sh .github/actions/*/*.sh overlay/usr/libexec/fedora-bootc/xrdp-keygen devtools/*.sh devtools/flatpak/*.sh devtools/flatpak/code devtools/flatpak/apply_extra devtools/flatpak/host-command devtools/flatpak/fish; do bash -n "$f"; done
+    for f in image/*.sh installer/*.sh scripts/*.sh .github/actions/*/*.sh features/*/*.sh features/xrdp/overlay/usr/libexec/fedora-bootc/xrdp-keygen devtools/*.sh devtools/flatpak/*.sh devtools/flatpak/code devtools/flatpak/apply_extra devtools/flatpak/host-command devtools/flatpak/fish; do bash -n "$f" || exit 1; done
     sh -n dotfiles.sh
+    # pkg.yml, requires, no file shipped twice
+    image/features.sh features
 
 # Validate the dotfiles inside the built image (the image has all the tools)
 check-image tag=tag:
@@ -177,7 +184,7 @@ shell tag=tag:
 #
 # The image must accept root over SSH by key: bcvk logs into its VM as root
 # (hardcoded) with a key it injects as a systemd credential, so
-# `PermitRootLogin no` in overlay/etc/ssh/sshd_config.d/ breaks this recipe,
+# `PermitRootLogin no` in features/ssh/overlay/etc/ssh/sshd_config.d/ breaks this recipe,
 # silently: anything that stops bcvk reaching root over SSH looks the same
 # (the VM boots to the greeter, bcvk times out after 240s saying nothing).
 # To see the guest, add --log-dir=journal,console=DIR below and read the sshd

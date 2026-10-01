@@ -1,6 +1,6 @@
 # Kept out of the build context. The Containerfile COPYs only image/,
-# packages/, nvidia/, installer/, overlay/ and keys/cosign.pub; the Secure
-# Boot key material enters via `podman build --secret`, never via the context.
+# features/, installer/ and keys/cosign.pub; the Secure Boot key material
+# enters via `podman build --secret`, never via the context.
 #
 # home/ and dotfiles.sh are listed first on purpose: the dotfiles are NOT part
 # of any image and must never become part of one. Excluding them here means a
@@ -14,10 +14,9 @@ dotfiles.sh
 output
 docs
 .github
-*.md
+**/*.md
 Justfile
 renovate.json
-repart.d
 # the dev container and the VS Code Flatpak, built from their own directory
 devtools
 

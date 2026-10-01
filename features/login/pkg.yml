@@ -1,0 +1,11 @@
+# noctalia-greeter itself is not in Fedora: build.sh builds it from source,
+# and it is installed with these.
+packages:
+  - greetd
+  - greetd-selinux
+  # semanage and matchpathcon: setup.sh labels the greeter's state dir and
+  # checks the result.
+  - policycoreutils-python-utils
+  - libselinux-utils
+requires:
+  - sessions  # what the greeter offers

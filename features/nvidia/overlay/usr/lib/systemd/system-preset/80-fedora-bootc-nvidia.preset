@@ -1,0 +1,6 @@
+# The driver's suspend, resume and hibernate helpers, which keep the GPU's
+# memory across sleep (usr/lib/modprobe.d/nvidia.conf).
+# xorg-x11-drv-nvidia-power's own preset enables them too; kept explicit.
+enable nvidia-suspend.service
+enable nvidia-resume.service
+enable nvidia-hibernate.service

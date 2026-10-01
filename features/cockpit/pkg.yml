@@ -1,0 +1,20 @@
+# Installed but off: `sudo systemctl enable --now cockpit.socket`, then
+# http://localhost:9090. It only listens on loopback
+# (overlay/usr/lib/systemd/system/cockpit.socket.d/). Pages: system, services
+# (fail2ban included), logs, accounts, terminal, networking and firewall
+# (-networkmanager), storage (-storaged), SELinux, files, diagnostics
+# (-sosreport), podman containers (-podman, system and per-user). Fedora has no
+# Cockpit plugin for docker or fail2ban. Left out on purpose: -packagekit and
+# -ostree, whose update pages do not apply to a bootc system. The Metrics page
+# is switched off by overlay/etc/cockpit/metrics.override.json (a condition
+# that never holds); delete that file to get it back.
+packages:
+  - cockpit-ws
+  - cockpit-bridge
+  - cockpit-system
+  - cockpit-networkmanager
+  - cockpit-storaged
+  - cockpit-podman
+  - cockpit-selinux
+  - cockpit-files
+  - cockpit-sosreport

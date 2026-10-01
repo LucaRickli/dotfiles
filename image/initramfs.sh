@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 #
 # Rebuild the initramfs as the last change to the rootfs: it must contain the
-# bootc/composefs dracut module (overlay/usr/lib/dracut/dracut.conf.d/) and, on
-# the NVIDIA variant, the nvidia modules for early KMS (nvidia/nvidia.sh flips
-# RPM Fusion's omit_drivers to force_drivers before this runs). The same script
-# serves both variants; `bootc container split-kernel-and-rootfs` then lifts
-# kernel + initramfs out of the rootfs and into the UKI.
+# bootc/composefs dracut module
+# (features/boot/overlay/usr/lib/dracut/dracut.conf.d/) and, on the NVIDIA
+# variant, the nvidia modules for early KMS (features/nvidia/setup.sh flips
+# RPM Fusion's omit_drivers to force_drivers before this runs). The same
+# script serves both variants; `bootc container split-kernel-and-rootfs` then
+# lifts kernel + initramfs out of the rootfs and into the UKI.
 #
 set -euxo pipefail
 

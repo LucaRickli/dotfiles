@@ -1,0 +1,15 @@
+# Kernel and module build tools. The nvidia add-on's module build needs them
+# (it requires this feature); otherwise a toolbox covers the same.
+packages:
+  - bind-utils
+  - bc
+  - cpio
+  - perl
+  - dwarves
+  - xmlto
+  - kmod
+  - elfutils-libelf-devel
+  - ncurses
+  - openssl
+  - flex
+  - bison

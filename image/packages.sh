@@ -1,44 +1,54 @@
 #!/usr/bin/env bash
 #
-# Image build, part 1: the packages from packages/packages.txt. (Part 2,
-# image/finalize.sh, runs after overlay/ is copied in.)
-# Runs inside `podman build` (see Containerfile) with the repo bind-mounted at /ctx.
+# Image build, part 1, for one set of features: the base, or an add-on on
+# top of it (image/features.sh sorts them). Each feature's pre-install.sh,
+# then every package (pkg.yml) in one transaction, then each
+# post-install.sh. (Part 2, image/finalize.sh, runs after the set's overlay/
+# trees are copied in.) Runs inside `podman build` (see Containerfile) with
+# the set's package lists, hooks and repo files at /ctx/features.
 #
 set -euxo pipefail
 
 CTX=${CTX:-/ctx}
+shopt -s nullglob
 
-# Package list files: one package per line, `#` comments and blank lines ignored.
-pkgs() { grep -hvE '^\s*(#|$)' "$@"; }
+# --- Before the transaction ---------------------------------------------------
+# What the package list cannot say: repos that come as release packages,
+# build dependencies pinned to the image's kernel (features/nvidia/).
+for hook in "$CTX"/features/*/pre-install.sh; do
+    "$hook"
+done
 
 # --- Packages ----------------------------------------------------------------
-# One transaction. Third-party packages come from the .repo files in
-# overlay/etc/yum.repos.d/, copied in just before this script; `dnf -y`
-# imports each repo's gpgkey= on first use. noctalia-greeter is the RPM the
-# Containerfile's `greeter` stage built, mounted at /run/greeter.
+# The set's packages and excludes from the features' pkg.yml, one per line in
+# install.txt and exclude.txt (written by image/features.sh, so the build
+# needs no YAML parser past that stage). One transaction: every dnf run
+# rewrites the rpm database, a layer's worth.
 #
-# The excludes are weak dependencies that would only duplicate Noctalia and
-# ghostty: niri's upstream defaults (waybar, fuzzel, alacritty, swaylock),
-# wayfire's wf-shell, and sway's foot and wmenu. The configs that referenced
-# them are pointed at Noctalia and ghostty instead (finalize.sh,
-# overlay/etc/xdg/labwc/environment, overlay/etc/sway/config.d/, river-init).
-# Excluding rather than disabling weak deps altogether, because much else
-# here relies on them (noctalia's upower, gnome-control-center's
-# NetworkManager-wifi, ...).
-dnf -y install \
-    --exclude=waybar --exclude=fuzzel --exclude=alacritty --exclude=swaylock \
-    --exclude=wf-shell --exclude=foot --exclude=wmenu \
-    $(pkgs "$CTX"/packages/packages.txt) /run/greeter/noctalia-greeter-*.rpm
+# Third-party packages come from the .repo files features ship in
+# overlay/etc/yum.repos.d/, copied in here because the overlays arrive after
+# this step; `dnf -y` imports each repo's gpgkey= on first use.
+# The RPMs the features' build.sh made (image/builds.sh) are mounted at
+# /run/builds for the base.
+# Arrays, so that a name with a glob character reaches dnf as written
+# (nullglob would drop it).
+mapfile -t install <"$CTX/features/install.txt"
+mapfile -t exclude < <(sed 's/^/--exclude=/' "$CTX/features/exclude.txt")
+built=(/run/builds/*.rpm)
+for repo in "$CTX"/features/*/overlay/etc/yum.repos.d/*.repo; do
+    cp "$repo" /etc/yum.repos.d/
+done
+if [ $((${#install[@]} + ${#built[@]})) -gt 0 ]; then
+    dnf -y install "${exclude[@]}" "${install[@]}" "${built[@]}"
+fi
 
-# --- Keys the packages generated for "this machine" ---------------------------
-# xrdp's %posttrans creates its private keys (the TLS pair key.pem/cert.pem and
-# the RDP-security RSA key rsakeys.ini) when they are missing. Here that is at
-# image build time, so every machine would share one set, published with the
-# image. Deleted in this same RUN, so they never reach a layer; each machine
-# generates its own before xrdp starts (overlay/usr/libexec/fedora-bootc/
-# xrdp-keygen). finalize.sh asserts no private key is left where per-machine
-# state lives; CI's scan covers the whole image (.github/actions/scan-image).
-rm -f /etc/xrdp/key.pem /etc/xrdp/cert.pem /etc/xrdp/rsakeys.ini
+# --- Within this layer --------------------------------------------------------
+# What must never reach a layer of its own, such as keys a package's scriptlet
+# generated for "this machine" (features/xrdp/post-install.sh), or the
+# Secure Boot key a module build signs with (features/nvidia/).
+for hook in "$CTX"/features/*/post-install.sh; do
+    "$hook"
+done
 
 # --- Cleanup: keep /var free of build leftovers (bootc container lint) ------
 dnf -y clean all

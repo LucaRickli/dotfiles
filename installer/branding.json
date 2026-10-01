@@ -4,6 +4,6 @@
   "copy": {
     "welcome_title": "Install Fedora bootc",
     "welcome_subtitle": "A personal image-based Fedora: systemd-boot, sealed UKI, composefs.",
-    "done_subtitle": "Remove the installation media and restart. After logging in: clone your repo, run ./dotfiles.sh and install the apps in packages/flatpaks.txt."
+    "done_subtitle": "Remove the installation media and restart. After logging in: clone your repo, run ./dotfiles.sh and install the apps in flatpaks.txt."
   }
 }

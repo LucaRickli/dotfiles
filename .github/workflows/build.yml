@@ -47,7 +47,7 @@ on:
       - "devtools/**"
       - ".github/workflows/devcontainer.yml"
       - ".github/workflows/flatpak.yml"
-      - "packages/flatpaks.txt"
+      - "flatpaks.txt"
       # CI plumbing that builds nothing itself; ci.yml lints it on push
       - "renovate.json"
       - ".github/workflows/ci.yml"
@@ -378,8 +378,8 @@ jobs:
           rm -rf out kernel
           df -h /
 
-      # Its own scan: nvidia.sh adds to the base, including a step that puts
-      # the Secure Boot key into the build and removes it again. Scanned and
+      # Its own scan: features/nvidia/ adds to the base, including a step that
+      # puts the Secure Boot key into the build and removes it again. Scanned and
       # pushed only here, after "Build image" removed the key from the runner:
       # trivy is a third-party binary and never runs next to it.
       - name: Scan the unsealed NVIDIA variant
@@ -462,7 +462,7 @@ jobs:
         run: |
           test -n "$COSIGN_PRIVATE_KEY" || {
             echo "SIGNING_SECRET is not set. The image requires a valid cosign"
-            echo "signature to be pullable (overlay/etc/containers/policy.json),"
+            echo "signature to be pullable (features/updates/overlay/etc/containers/),"
             echo "so pushing unsigned would ship an unusable image."
             echo "Set it to the contents of keys/cosign.key (keys/README.md)."
             exit 1

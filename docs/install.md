@@ -89,13 +89,13 @@ sudo podman run --rm --privileged --pid=host \
 
 ### Option B: LUKS, with systemd-repart
 
-Run from a checkout of this repo; [`repart.d/`](../repart.d/) defines the
+Run from a checkout of this repo; [`docs/repart.d/`](repart.d/) defines the
 ESP and a LUKS2 btrfs root filling the disk.
 
 ```sh
 # 1. Partition (DESTROYS the disk)
 sudo systemd-repart --empty=force --dry-run=no --discard=no \
-    --definitions=repart.d /dev/nvme0n1
+    --definitions=docs/repart.d /dev/nvme0n1
 
 # 2. Open and mount. repart created the LUKS volume with an EMPTY passphrase
 sudo cryptsetup open /dev/nvme0n1p2 root      # just press Enter

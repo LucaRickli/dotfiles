@@ -1,0 +1,11 @@
+# QEMU/KVM with libvirt and Virtual Machine Manager, Fedora's virtualization
+# group. Fedora's presets enable libvirt's daemons (socket-activated), and the
+# default NAT network starts with them. The accounts the installer creates are
+# in the libvirt group, which manages the system's VMs without a password.
+packages:
+  - qemu-kvm
+  - libvirt-daemon-kvm
+  - libvirt-daemon-config-network
+  - virt-install
+  - virt-manager
+  - virt-viewer

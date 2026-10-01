@@ -1,0 +1,4 @@
+# For every account: the podman API socket, which `podman compose` talks to
+# (Dev Containers with a compose file). Socket-activated, so nothing runs
+# until something connects.
+enable podman.socket

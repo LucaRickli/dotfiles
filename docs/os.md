@@ -2,9 +2,9 @@
 
 greetd with noctalia-greeter, five Wayland sessions (niri, labwc, sway, river,
 wayfire) running the [Noctalia](https://noctalia.dev) shell, ghostty and fish,
-podman and docker, QEMU/KVM with Virtual Machine Manager, XRDP, and an NVIDIA
-variant. Desktop apps are Flatpaks (`packages/flatpaks.txt`); the development
-tools are not on the host ([devtools.md](devtools.md)).
+podman and docker, QEMU/KVM with Virtual Machine Manager, XRDP, a local LLM
+server, and an NVIDIA variant. Desktop apps are Flatpaks (`flatpaks.txt`);
+the development tools are not on the host ([devtools.md](devtools.md)).
 
 ## Remote desktop (XRDP)
 
@@ -14,7 +14,7 @@ Port 3389, your normal account (not root), labwc by default: `niri`, `sway`,
 picks another (niri needs a GPU). For resizing, enable Remmina's "Dynamic
 resolution update" and "Use initial window size". Sessions log to
 `~/.xrdp-session.log`; details in
-[`overlay/etc/xrdp/startwm.sh`](../overlay/etc/xrdp/startwm.sh).
+[`startwm.sh`](../features/xrdp/overlay/etc/xrdp/startwm.sh).
 
 Each machine generates its own XRDP keys before xrdp first starts, so a
 client asks once to trust the certificate. Compare the fingerprint it shows
@@ -27,6 +27,23 @@ Virtual Machine Manager (`virt-manager`) and `virt-install` on the system's
 libvirt (`qemu:///system`), with the default NAT network. Accounts the
 installer created can manage VMs without a password; for another account:
 `sudo usermod -aG libvirt <user>`, then log in again.
+
+## Local LLM
+
+[shimmy](https://github.com/Michael-A-Kuykendall/shimmy) serves GGUF models
+as an OpenAI-compatible API on `http://127.0.0.1:11435/v1`, on the GPU
+through Vulkan. Off by default; per user:
+
+```sh
+mkdir -p ~/.local/share/shimmy/models    # put .gguf files here
+systemctl --user enable --now shimmy
+curl http://127.0.0.1:11435/v1/models
+```
+
+It also finds models in `~/models` and the Hugging Face, Ollama and LM Studio
+caches; upstream lists the models it certifies. The VS Code Flatpak reaches
+it at the same address. Its WebGPU engine is young: on a Ryzen 7000 iGPU
+(RADV) a request hangs the GPU until the kernel resets it.
 
 ## Other defaults
 
@@ -44,8 +61,9 @@ installer created can manage VMs without a password; for another account:
 
 ## NVIDIA
 
-`nvidia` and `nvidia-uki` add the RPM Fusion driver, built with akmods and
-signed with the same db key (open kernel modules unless built with `closed`).
+`nvidia` and `nvidia-uki` add the RPM Fusion driver
+([`features/nvidia/`](../features/nvidia/)), built with akmods and signed
+with the same db key (open kernel modules unless built with `closed`).
 The live ISO installs it on machines with a GTX 16 / RTX 20 series or newer
 (what the open modules support); to move an existing install,
 `sudo bootc switch ghcr.io/lucarickli/fedora-bootc:nvidia-uki`. Under Secure

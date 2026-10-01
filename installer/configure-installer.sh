@@ -516,7 +516,7 @@ user = "liveuser"
 command = "agreety --cmd labwc"
 user = "greetd"
 EOF
-# The installed image enables greetd through its preset in overlay/, which
+# The installed image enables greetd through its preset (features/login/), which
 # this image does not carry. The unit's Alias=display-manager.service is what
 # graphical.target starts.
 systemctl enable greetd.service
@@ -536,7 +536,7 @@ echo 'liveuser ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/liveuser
 chmod 0440 /etc/sudoers.d/liveuser
 
 # The live session's labwc config. The minimal live image does not carry
-# overlay/, so these are written here rather than inherited.
+# the features' overlays, so these are written here rather than inherited.
 mkdir -p /etc/xdg/labwc
 
 # Keyboard layout. The LUKS passphrase chosen in the wizard is typed under

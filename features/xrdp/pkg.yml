@@ -1,0 +1,18 @@
+# Enabled by default (preset), on 3389. PAM authenticates, then
+# overlay/etc/xrdp/startwm.sh starts the compositor directly; see there and
+# setup.sh. xorgxrdp is the X server the compositors nest inside.
+packages:
+  - xrdp
+  - xorgxrdp
+  # The resize watcher in startwm.sh: reads the X screen size (xdpyinfo) and
+  # resizes the compositor's window (xdotool).
+  - xdotool
+  - xdpyinfo
+  # semanage and matchpathcon: setup.sh labels startwm.sh and checks the
+  # result.
+  - policycoreutils-python-utils
+  - libselinux-utils
+requires:
+  - sessions  # the compositors startwm.sh starts
+  - desktop   # the keyring the PAM stack unlocks
+  - fail2ban  # the only guard against password guessing on 3389

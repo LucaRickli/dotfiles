@@ -1,0 +1,13 @@
+packages:
+  - git
+  # Links home/.config into ~/.config (./dotfiles.sh).
+  - stow
+  # Dev environments live in containers (toolbox comes with container-management).
+  - distrobox
+  - curl
+  - jq
+  - yq
+  - vim-enhanced
+  - nmap
+requires:
+  - terminal  # fish, the default shell (overlay/etc/default/useradd)

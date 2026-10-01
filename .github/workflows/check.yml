@@ -9,7 +9,7 @@ on:
     branches: [main]
     # Together with devcontainer.yml, flatpak.yml and ci.yml, must cover
     # everything build.yml's paths-ignore excludes except the docs (**.md,
-    # docs/**) and packages/flatpaks.txt, or a push touching only that runs
+    # docs/**) and flatpaks.txt, or a push touching only that runs
     # no CI.
     paths:
       - "home/**"

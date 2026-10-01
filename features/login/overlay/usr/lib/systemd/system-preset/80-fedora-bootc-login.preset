@@ -1,0 +1,3 @@
+# greetd (noctalia-greeter) is the display manager. Its unit carries
+# Alias=display-manager.service, and nothing else in the image claims it.
+enable greetd.service

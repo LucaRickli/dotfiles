@@ -2,7 +2,7 @@
 #
 # GRUB out, systemd-boot in. Runs after packages.sh, before the overlay is
 # copied (the install/kargs/dracut config that goes with this lives in
-# overlay/usr/lib/). The systemd-boot loader binary is signed in place with
+# features/boot/overlay/usr/lib/). The systemd-boot loader binary is signed in place with
 # the Secure Boot db key (podman secrets); `bootc install` copies it from
 # /usr/lib/systemd/boot/efi/ into the ESP, so the signature must exist here,
 # before the composefs digest is computed over /usr.

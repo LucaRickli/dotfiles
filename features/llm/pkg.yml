@@ -1,0 +1,8 @@
+# shimmy, a local OpenAI-compatible LLM server for GGUF models, on the GPU
+# through Vulkan (its WebGPU engine). Off by default, per user. Fedora does
+# not package it: build.sh builds it from crates.io.
+packages:
+  # Loaded at runtime: the Vulkan loader and Mesa's drivers (the nvidia
+  # add-on brings NVIDIA's own).
+  - vulkan-loader
+  - mesa-vulkan-drivers

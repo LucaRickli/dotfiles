@@ -1,0 +1,15 @@
+# shimmy for one user, off by default: `systemctl --user enable --now shimmy`.
+# Serves the GGUF models in ~/.local/share/shimmy/models (also ~/models and
+# the Hugging Face, Ollama and LM Studio caches) as an OpenAI-compatible API
+# on http://127.0.0.1:11435/v1, loopback only.
+[Unit]
+Description=shimmy local LLM server
+Documentation=https://github.com/Michael-A-Kuykendall/shimmy
+
+[Service]
+ExecStart=/usr/bin/shimmy serve --bind 127.0.0.1:11435
+WorkingDirectory=%h
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

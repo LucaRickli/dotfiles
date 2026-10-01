@@ -1,0 +1,3 @@
+# systemd-boot's menu stays hidden unless a key is held at power-on
+# (usr/lib/systemd/system/hide-boot-menu.service).
+enable hide-boot-menu.service

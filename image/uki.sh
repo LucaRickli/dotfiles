@@ -31,7 +31,7 @@ bootc container ukify \
 # Fallback if `bootc container ukify` grows or loses flags (it is experimental):
 # the manual flow from travier/fedora-atomic-desktops-sealed. It does not read
 # kargs.d, so --cmdline must list every karg in /target/usr/lib/bootc/kargs.d
-# (plus nvidia/overlay's for the NVIDIA variant):
+# (plus features/nvidia/overlay's for the NVIDIA variant):
 #   digest="$(bootc container compute-composefs-digest /target)"
 #   ukify build --linux "${KERNEL_DIR}/${kver}/vmlinuz" --initrd "${KERNEL_DIR}/${kver}/initramfs.img" \
 #       --uname "${kver}" --os-release "@/target/usr/lib/os-release" \

@@ -4,7 +4,7 @@
   the UKI and the NVIDIA modules.
 - **Image signing** (cosign, `just cosign-keygen`): CI signs every pushed
   image, and the machine verifies its updates against `cosign.pub`
-  (`overlay/etc/containers/policy.json`).
+  (`features/updates/overlay/etc/containers/policy.json`).
 
 ```text
 keys/GUID           owner GUID                      committed

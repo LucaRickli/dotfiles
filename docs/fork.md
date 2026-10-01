@@ -30,7 +30,7 @@ OVMF for VM tests (the recipes assume Arch paths).
    [`.github/rulesets/main.json`](../.github/rulesets/main.json) (Rules,
    Rulesets, New ruleset, Import a ruleset). It requires the `ci-ok` check
    from GitHub Actions before anything merges into `main`, so Renovate's
-   automerge waits for the whole build ([updates.md](updates.md)), and lets
+   automerge waits for the whole build ([updates.md](architecture/updates.md)), and lets
    repository admins bypass it, so you can still push to `main` directly.
 5. After the first push, make the GHCR packages public. If a package already
    exists (pushed from another repository), grant this one access in the

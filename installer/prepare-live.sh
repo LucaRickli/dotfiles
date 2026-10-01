@@ -146,7 +146,7 @@ mkdir -p /var/fisherman-tmp
 # manual install route in docs/install.md.
 #
 # Live image only. The installed system keeps container storage on btrfs,
-# where the native driver works and is faster, so this must not go in overlay/.
+# where the native driver works and is faster, so this must not go in features/.
 cat > /etc/containers/storage.conf << 'EOF'
 [storage]
 driver = "overlay"

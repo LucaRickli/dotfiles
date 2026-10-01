@@ -118,7 +118,7 @@ jobs:
                 devcontainer=true; flatpak=true ;;
             esac
             case "$f" in
-              *.md|docs/*|home/*|dotfiles.sh|scripts/*|packages/flatpaks.txt|devtools/*|renovate.json|\
+              *.md|docs/*|home/*|dotfiles.sh|scripts/*|flatpaks.txt|devtools/*|renovate.json|\
               .github/workflows/check.yml|.github/workflows/devcontainer.yml|\
               .github/workflows/flatpak.yml|.github/workflows/ci.yml|.github/workflows/notify.yml|\
               .github/workflows/release.yml|.github/rulesets/*) ;;
@@ -141,7 +141,7 @@ jobs:
             # installer/, the signature policy and key) and how release.yml and
             # the Justfile assemble it.
             case "$f" in
-              Containerfile|.containerignore|Justfile|installer/*|overlay/etc/containers/*|keys/cosign.pub|\
+              Containerfile|.containerignore|Justfile|installer/*|features/updates/overlay/etc/containers/*|keys/cosign.pub|\
               .github/workflows/release.yml) iso=true ;;
             esac
           done < files.txt
@@ -161,9 +161,10 @@ jobs:
           } | tee -a "$GITHUB_OUTPUT"
 
   # Cheap, and on every PR: the workflow files themselves (actionlint runs
-  # shellcheck on every `run:` block), the shell syntax of every script
-  # (`just check` without the dotfile validation, which needs the image), and
-  # the Renovate config when it changed.
+  # shellcheck on every `run:` block), the shell syntax of every script and
+  # the features (`just check-syntax`: `just check` without the dotfile
+  # validation, which needs the image), and the Renovate config when it
+  # changed.
   lint:
     needs: changes
     runs-on: ubuntu-26.04
@@ -184,17 +185,16 @@ jobs:
           docker run --rm -v "$PWD":/repo:ro --workdir /repo \
             "docker.io/rhysd/actionlint:${ACTIONLINT_VERSION}" -color
 
-      - name: Shell syntax
-        run: |
-          set -euo pipefail
-          # One at a time: `bash -n a.sh b.sh` parses only a.sh.
-          for f in image/*.sh nvidia/nvidia.sh installer/*.sh scripts/*.sh .github/actions/*/*.sh \
-                   overlay/usr/libexec/fedora-bootc/xrdp-keygen devtools/*.sh devtools/flatpak/*.sh \
-                   devtools/flatpak/code devtools/flatpak/apply_extra devtools/flatpak/host-command \
-                   devtools/flatpak/fish; do
-            bash -n "$f"
-          done
-          sh -n dotfiles.sh
+      - name: Install just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: "1.58.0"
+
+      # Every script's syntax and how the features fit together (pkg.yml,
+      # requires, no file shipped twice; the image build checks the same).
+      # yq and jq come with the runner.
+      - name: Syntax and features
+        run: just check-syntax
 
       # Renovate needs a current Node (44.x: 24 or newer).
       - name: Node for Renovate

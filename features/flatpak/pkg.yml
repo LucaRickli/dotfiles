@@ -1,0 +1,4 @@
+packages:
+  # The apps themselves are installed per machine (flatpaks.txt at the
+  # repository root); nothing installs from these remotes on its own.
+  - flatpak

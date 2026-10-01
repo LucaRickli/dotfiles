@@ -27,43 +27,71 @@
 ARG OS_BASE=os
 ARG SEAL=os-image
 
+# One base for the OS image, the live ISO and the build stages. It floats on
+# the release tag; moving to the next Fedora release is a deliberate edit
+# here.
+FROM quay.io/fedora/fedora-bootc:44 AS base
+
 # The parts of the repo the build scripts read, bind-mounted into the RUN steps
 # below. Only what each step needs, so that editing docs, CI files or home/
 # does not invalidate the cached package layer.
+#
+# image/features.sh reads every feature's pkg.yml, checks how the features
+# fit together (requires, no file shipped twice) and sorts them: the base
+# apart from each add-on, and per set the package step's files apart from
+# the rest, so that editing a feature's files or setup does not re-run a
+# package step, and editing an add-on does not touch the base. COPY cannot
+# pick files like that, hence the stage, which also needs yq for the YAML
+# (from the release repo alone: no updates metadata to fetch for it).
+FROM base AS features
+RUN dnf -y install --repo=fedora yq && dnf -y clean all
+COPY image/features.sh /image/
+COPY features/ /features/
+RUN /image/features.sh /features /out
+
 FROM scratch AS ctx
 COPY image/packages.sh /image/
-COPY packages/packages.txt /packages/
+COPY --from=features /out/base/packages/ /features/
 
-FROM scratch AS ctx-greeter
-COPY image/greeter.sh image/noctalia-greeter.spec /
+FROM scratch AS ctx-builds
+COPY image/builds.sh /image/
+COPY --from=features /out/base/builds/ /builds/
 
 FROM scratch AS ctx-boot
 COPY image/bootloader.sh image/initramfs.sh image/uki.sh /image/
 
-FROM scratch AS ctx-finalize
-COPY image/finalize.sh /image/
-
+# The same two steps for the nvidia add-on (features/nvidia/).
 FROM scratch AS ctx-nvidia
-COPY nvidia/ /nvidia/
+COPY image/packages.sh /image/
+COPY --from=features /out/nvidia/packages/ /features/
+
+FROM scratch AS ctx-nvidia-finalize
+COPY image/finalize.sh /image/
+COPY --from=features /out/nvidia/all/ /features/
 
 FROM scratch AS ctx-live
 COPY installer/ /
 
-# One base for both the OS image and the live ISO. It floats on the release
-# tag; moving to the next Fedora release is a deliberate edit here.
-FROM quay.io/fedora/fedora-bootc:44 AS base
+# What Fedora does not package (noctalia-greeter, shimmy, ...): every base
+# feature's build.sh, run by image/builds.sh. From the same base as
+# the image, so it links against the libraries the image ships and a base
+# update rebuilds it; a stage of its own, so no toolchain reaches the image.
+# Adding or changing a build needs no edit here.
+FROM base AS builds
+RUN --mount=type=bind,from=ctx-builds,source=/,target=/ctx /ctx/image/builds.sh
 
-# noctalia-greeter, which Fedora does not package: built from this upstream
-# tag into an RPM (image/greeter.sh) that packages.sh installs with the rest.
-# From the same base as the image, so it links against the libraries the image
-# ships, and a base update rebuilds both together. The commit is what gets
-# built, the tag names its version; Renovate bumps both, and a tag moved
-# upstream gets a PR of its own that is never automerged.
-FROM base AS greeter
-# renovate: datasource=github-tags depName=noctalia-dev/noctalia-greeter
-ARG GREETER_VERSION=v1.6.0
-ARG GREETER_COMMIT=44337ecba043749c29de6f3d563315b91987a908
-RUN --mount=type=bind,from=ctx-greeter,source=/,target=/ctx /ctx/greeter.sh
+# The built RPMs alone, for the package step: COPY hashes content, so a build
+# that only changed files leaves the package layer cached.
+FROM scratch AS built-rpms
+COPY --from=builds /out/rpm/ /
+
+# finalize.sh's context, here because it lists what the builds made, to
+# check against every feature's overlay paths.
+FROM scratch AS ctx-finalize
+COPY image/finalize.sh /image/
+COPY --from=features /out/base/all/ /features/
+COPY --from=features /out/overlay-paths.txt /
+COPY --from=builds /out/root-paths.txt /
 
 FROM base AS os
 
@@ -72,14 +100,14 @@ FROM base AS os
 RUN mkdir -p /var/roothome
 
 # The comps groups the image is composed from. Its own step, so that a change
-# to packages/ does not rebuild these GBs.
+# to a feature's packages does not rebuild these GBs.
 #
 # workstation-product is the Fedora Workstation base set (firmware tools,
 # chrony, btrfs-progs, input methods, ...). Two of its defaults are excluded:
 # gnome-shell-extension-background-logo requires gnome-shell and would drag a
 # second desktop in with it (gdm, mutter, gnome-session), and unoconv pulls in
 # LibreOffice. The desktop here is greetd + noctalia-greeter and five Wayland
-# sessions (packages.txt).
+# sessions (features/login/, features/sessions/).
 #
 # fedora-release-ostree-desktop marks the image as an image-based desktop
 # (https://fedoraproject.org/wiki/Changes/UnprivilegedUpdatesAtomicDesktops).
@@ -93,14 +121,10 @@ RUN dnf -y group install \
     && dnf -y clean all \
     && rm -f /var/log/dnf5.log*
 
-# The repo definitions for the third-party packages in packages.txt. The rest
-# of overlay/ is copied in further down; packages.sh needs these first.
-COPY overlay/etc/yum.repos.d/ /etc/yum.repos.d/
-
-# Packages (packages.txt, plus the greeter RPM from the stage above). The
-# expensive layer: nothing below invalidates it.
+# Every base feature's packages (features/*/pkg.yml, plus the RPMs the
+# builds made). The expensive layer: nothing below invalidates it.
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
-    --mount=type=bind,from=greeter,source=/out,target=/run/greeter \
+    --mount=type=bind,from=built-rpms,source=/,target=/run/builds \
     /ctx/image/packages.sh
 
 # GRUB/bootupd out, systemd-boot in, signed with the db key from keys/
@@ -110,29 +134,39 @@ RUN --mount=type=bind,from=ctx-boot,source=/,target=/ctx \
     --mount=type=secret,id=secureboot_cert \
     /ctx/image/bootloader.sh
 
-# overlay/ lands verbatim on the image. The dotfiles in home/ never do.
-COPY overlay/ /
+# Every base feature's overlay/ lands verbatim on the image (no two may ship
+# the same path, image/features.sh). The dotfiles in home/ never do.
+COPY --from=features /out/base/overlay/ /
+# The files the builds made (shimmy, ...); none may also be in an overlay/
+# (image/finalize.sh checks).
+COPY --from=builds /out/root/ /
 
-# The cosign PUBLIC key: overlay/etc/containers/policy.json requires a valid
-# signature by it for every pull from ghcr.io/lucarickli/fedora-bootc, so the
-# machine verifies its own updates. CI signs after the push (build.yml).
+# The cosign PUBLIC key: the signature policy (features/updates/) requires a
+# valid signature by it for every pull from ghcr.io/lucarickli/fedora-bootc,
+# so the machine verifies its own updates. CI signs after the push
+# (build.yml).
 COPY keys/cosign.pub /etc/pki/containers/fedora-bootc.pub
 
-# Services, generated configs, and the build-time assertions.
+# Services, each feature's setup.sh, and the image-wide checks.
 RUN --mount=type=bind,from=ctx-finalize,source=/,target=/ctx /ctx/image/finalize.sh
 
 # --- everything below seals one of two things -------------------------------
 FROM ${OS_BASE} AS os-image
 
-# NVIDIA variant: the driver on top of that same base, nothing else different.
+# NVIDIA variant: the nvidia add-on (features/nvidia/) on top of that same
+# base, nothing else different, built like the base: packages, overlay,
+# finalize.
 #   NVIDIA_KMOD=open   open kernel modules (default, Turing+) | closed (Maxwell..Volta)
-# The modules are signed with the same db key as the UKI (one enrollment).
+# The modules are signed with the same db key as the UKI (one enrollment),
+# which only the package step gets; it also removes it again.
 FROM os-image AS os-nvidia
 ARG NVIDIA_KMOD=open
 RUN --mount=type=bind,from=ctx-nvidia,source=/,target=/ctx \
     --mount=type=secret,id=secureboot_key \
     --mount=type=secret,id=secureboot_cert \
-    /ctx/nvidia/nvidia.sh
+    /ctx/image/packages.sh
+COPY --from=features /out/nvidia/overlay/ /
+RUN --mount=type=bind,from=ctx-nvidia-finalize,source=/,target=/ctx /ctx/image/finalize.sh
 
 # Which of the two gets sealed (SEAL). `just build-nvidia` passes os-nvidia.
 FROM ${SEAL} AS rootfs
@@ -209,8 +243,8 @@ COPY --from=uki /out/ /boot/EFI/Linux/
 FROM base AS live
 RUN --mount=type=bind,from=ctx-live,source=/,target=/ctx /ctx/prepare-live.sh
 # The signature policy and the cosign public key, so the image the installer
-# pulls is verified here too. The rest of overlay/ configures the OS, not this.
-COPY overlay/etc/containers/ /etc/containers/
+# pulls is verified here too. The other features configure the OS, not this.
+COPY features/updates/overlay/etc/containers/ /etc/containers/
 COPY keys/cosign.pub /etc/pki/containers/fedora-bootc.pub
 
 # The graphical installer (bootc-installer Flatpak): started by labwc's
