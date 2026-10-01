@@ -20,7 +20,8 @@
 # Runs on pushes to main (changes that cannot touch the image excluded, check.yml
 # and ci.yml cover those), on demand, and as the first job of a release. It has
 # no schedule of its own: the weekly release rebuilds on the floating Fedora
-# base, and Renovate's merges (actions, bm binaries, chunkah) trigger a build.
+# base, and Renovate's merges (actions, chunkah, noctalia-greeter) trigger a
+# build.
 # Pull requests reach it through ci.yml, the PR gate, and only build and scan.
 # Images are signed with cosign; unsigned images are unusable, see "Sign image".
 #
@@ -39,16 +40,18 @@ on:
       - "home/**"
       - "dotfiles.sh"
       - ".github/workflows/check.yml"
-      # not part of the image either: devcontainer.yml builds the dev
-      # container, and the Flatpak list is installed per machine
-      - "devcontainer/**"
+      # host helpers (check.yml runs check-dotfiles.sh, ci.yml lints the rest)
+      - "scripts/**"
+      # not part of the image either: devcontainer.yml and flatpak.yml build
+      # the development tools, and the Flatpak list is installed per machine
+      - "devtools/**"
       - ".github/workflows/devcontainer.yml"
+      - ".github/workflows/flatpak.yml"
       - "packages/flatpaks.txt"
       # CI plumbing that builds nothing itself; ci.yml lints it on push
       - "renovate.json"
       - ".github/workflows/ci.yml"
       - ".github/workflows/notify.yml"
-      - ".github/workflows/cleanup.yml"
       - ".github/workflows/release.yml"
       - ".github/rulesets/**"
   workflow_dispatch:
@@ -77,87 +80,6 @@ env:
   IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
 
 jobs:
-  # The GitHub-release binaries bm manages (packages/binary.yaml), fetched and
-  # verified OUTSIDE the image build. Release downloads are the flakiest step
-  # of the whole pipeline (GitHub resets connections often enough to matter,
-  # for bm's own download as much as for what it fetches), so they happen in a
-  # small job where a retry costs seconds instead of failing minutes into an
-  # image build, and the verified result is cached keyed on binary.yaml: a
-  # build only touches release downloads when Renovate bumps a version.
-  # bm checks every file in-process (sha256, PGP, cosign, sigstore bundles via
-  # its own libraries), so the runner needs nothing installed and nothing
-  # unverified ever enters the bundle.
-  #
-  # The bundle is a tar mirroring the filesystem it lands on (usr/bin/...).
-  # The image build gets it as a /run/bundle.tar volume and build.sh unpacks it
-  # instead of syncing; local builds have no bundle and sync directly.
-  bm:
-    name: bm bundle
-    runs-on: ubuntu-26.04
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      # This cache is BOTH the cross-run reuse and the handoff to the base and
-      # build jobs, which restore the same key instead of passing a ~900 MB
-      # artifact up and back down. They run after this job, so the save (at
-      # job end, on a miss) is finished first, and an intra-run restore hits
-      # regardless of git ref, so it works on a tag-scoped release too.
-      # Exact key only: bm keeps no state and re-downloads everything on every
-      # sync (measured), so restoring an older bundle would win nothing.
-      - name: Cached bundle
-        id: cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: bundle.tar
-          key: bm-bundle-${{ hashFiles('packages/binary.yaml') }}
-
-      - name: Fetch and verify the binaries
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: |
-          set -euo pipefail
-          cfg=packages/binary.yaml
-          # GitHub's Ubuntu runners ship mikefarah's Go yq, the same flavour
-          # the image build uses (build.sh), so these are its expressions.
-          # Refuse the jq-based python-yq instead of feeding curl garbage: its
-          # syntax differs (-y, --arg) and `-r` alone would still "work".
-          yq --version | grep -q mikefarah || { echo "needs mikefarah's Go yq, found: $(yq --version 2>&1)" >&2; exit 1; }
-          #
-          # Bootstrap bm itself, checksum-verified, with the same retry the
-          # sync gets: its own download is as flaky as what it fetches.
-          bm_url=$(yq '.releases[] | select(.id == "bm") | .src' "$cfg")
-          bm_sum=$(yq '.releases[] | select(.id == "bm") | .integrity.signature' "$cfg")
-          bm="${RUNNER_TEMP}/bm"
-          for attempt in 1 2 3; do
-            if curl -fsSL -o "$bm" "$bm_url" &&
-               echo "$(curl -fsSL "$bm_sum" | awk '{print $1}')  $bm" | sha256sum -c -; then
-              break
-            fi
-            [ "$attempt" = 3 ] && { echo "bm bootstrap failed after 3 attempts" >&2; exit 1; }
-            echo "bm bootstrap attempt $attempt failed, retrying in 10s" >&2
-            sleep 10
-          done
-          chmod +x "$bm"
-          # A copy of the config with every dst redirected into ./stage, so
-          # the bundle mirrors the tree it will be unpacked onto.
-          stage="$PWD/stage" yq '.releases[].dst |= (strenv(stage) + .)' "$cfg" > "${RUNNER_TEMP}/bundle.yaml"
-          yq '.releases[].dst' "${RUNNER_TEMP}/bundle.yaml" | sort -u | while read -r d; do mkdir -p "$d"; done
-          # bm has no retry of its own and one failed release fails the whole
-          # sync; it reconciles against the config, so re-running is safe.
-          for attempt in 1 2 3; do
-            if "$bm" sync -c "${RUNNER_TEMP}/bundle.yaml"; then break; fi
-            [ "$attempt" = 3 ] && { echo "bm sync failed after 3 attempts" >&2; exit 1; }
-            echo "bm sync attempt $attempt failed, retrying in 10s" >&2
-            sleep 10
-          done
-          test -x stage/usr/bin/bm && test -x stage/usr/bin/kubectl
-          tar -cf bundle.tar -C stage usr
-
   # The unsealed OS: packages, overlay, services, bootloader, and its kernel
   # still in place. Built once and sealed twice, which is the only reason it
   # is a separate job; it is also a usable image on its own, installable the
@@ -168,7 +90,6 @@ jobs:
   # themselves. Building it here as well would only cost an hour.
   base:
     name: base
-    needs: bm
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-26.04
     timeout-minutes: 150
@@ -205,21 +126,11 @@ jobs:
           cp keys/db/db.pem "$sb/db.pem"
           echo "SB_DIR=$sb" >> "$GITHUB_ENV"
 
-      # The save finished before this job started (needs: bm), so
-      # fail-on-cache-miss is a real assertion, not a race.
-      - name: Restore the bm bundle
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: bundle.tar
-          key: bm-bundle-${{ hashFiles('packages/binary.yaml') }}
-          fail-on-cache-miss: true
-
       - name: Build
         run: |
           podman build --pull=newer \
             --secret "id=secureboot_key,src=${SB_DIR}/db.key" \
             --secret "id=secureboot_cert,src=${SB_DIR}/db.pem" \
-            --volume "$(pwd)/bundle.tar:/run/bundle.tar:ro" \
             --target os \
             --tag "${IMAGE_NAME}:base" \
             .
@@ -284,7 +195,7 @@ jobs:
 
   build:
     name: build (${{ matrix.variant }})
-    needs: [bm, base]
+    needs: base
     # Runs after a successful base, or without one on a pull request (base is
     # skipped there, see above); never after a failure or a cancel.
     if: ${{ !failure() && !cancelled() }}
@@ -340,17 +251,6 @@ jobs:
           pull-from: Containerfile
           # the base pushed above; empty on a pull request
           pull: ${{ needs.base.outputs.ref }}
-
-      # Only pull requests build the `os` stage in this job (nothing was
-      # pushed, so OS_BASE stays `os`). Pushed builds start FROM the ref the
-      # base job pushed and never run build.sh here.
-      - name: Restore the bm bundle (pull requests build the base here)
-        if: github.event_name == 'pull_request'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: bundle.tar
-          key: bm-bundle-${{ hashFiles('packages/binary.yaml') }}
-          fail-on-cache-miss: true
 
       # The db key signs systemd-boot, the sealed UKI and (on the NVIDIA
       # variant) the kernel modules. A machine that enrolled the key can only
@@ -440,17 +340,12 @@ jobs:
           if [ -n "$BASE_REF" ]; then
             base_arg=(--build-arg "OS_BASE=${BASE_REF}")
           fi
-          # Only present on a pull request (restored above for build.sh).
-          bundle_arg=()
-          if [ -f bundle.tar ]; then
-            bundle_arg=(--volume "$(pwd)/bundle.tar:/run/bundle.tar:ro")
-          fi
           secrets=(--secret "id=secureboot_key,src=${SB_DIR}/db.key"
                    --secret "id=secureboot_cert,src=${SB_DIR}/db.pem")
           # Phase 1: rootfs, split, the rechunk into out/, and the kernel out
           # to kernel/ so that phase 2 needs nothing from the rootfs stages.
           podman build --pull=newer "${secrets[@]}" \
-            --volume "$(pwd)":/run/src "${bundle_arg[@]}" \
+            --volume "$(pwd)":/run/src \
             "${base_arg[@]}" --build-arg "SEAL=${SEAL}" \
             --target chunkah \
             .
@@ -458,7 +353,7 @@ jobs:
           # base image republished in the meantime (fedora-bootc:44 moves
           # daily) must not give kernel/ a different rootfs than out/.
           podman build --pull=missing "${secrets[@]}" \
-            --volume "$(pwd)":/run/src "${bundle_arg[@]}" \
+            --volume "$(pwd)":/run/src \
             "${base_arg[@]}" --build-arg "SEAL=${SEAL}" \
             --target kernel-out \
             .

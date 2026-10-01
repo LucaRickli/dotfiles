@@ -5,13 +5,13 @@
 #
 # Why one gate instead of a pull_request trigger on each workflow:
 #
-# - The image build is a chain (bm -> base -> build matrix) whose later jobs
-#   only exist once the earlier ones finished. "Every check so far is green"
+# - The image build is a chain (base -> build matrix) whose later jobs only
+#   exist once the earlier ones finished. "Every check so far is green"
 #   can be true in the gap between two links, and an automerge that looks at
 #   that merges a PR whose build has not even started.
-# - check.yml and devcontainer.yml only matter for some paths. A required
-#   check from a path-filtered workflow never reports on the PRs it skips, and
-#   blocks them forever.
+# - check.yml, devcontainer.yml and flatpak.yml only matter for some paths.
+#   A required check from a path-filtered workflow never reports on the PRs
+#   it skips, and blocks them forever.
 #
 # `ci-ok` exists on every PR and reports only after everything it depends on
 # has finished: skipped (not affected by this PR) counts as passed, failed or
@@ -21,16 +21,17 @@
 # reports it if that fails.
 #
 # What a PR gets: lint always; the image build (both variants, sealed),
-# check.yml and devcontainer.yml when the PR can affect them; a rehearsal of
-# the publishing steps (push, sign, verify, promote) always; and the live ISO
-# when something it is made of changes. Together that runs every tool the
-# merge will later publish with, so an automerged update of one is tested
-# before it lands.
+# check.yml, devcontainer.yml and flatpak.yml when the PR can affect them; a
+# rehearsal of the publishing steps (push, sign, verify, promote) always; and
+# the live ISO when something it is made of changes. Together that runs every
+# tool the merge will later publish with, so an automerged update of one is
+# tested before it lands.
 #
-# On a push to main only the lint job runs, and only when CI plumbing changed
-# (build.yml, check.yml and devcontainer.yml run themselves on push): those
-# files are in build.yml's paths-ignore, and without this a push touching only
-# them would run no CI at all.
+# On a push to main only the lint job and the signing rehearsal run, and only
+# when CI plumbing or scripts/ changed (build.yml, check.yml, devcontainer.yml
+# and flatpak.yml run themselves on push): those files are in build.yml's
+# paths-ignore, and without this a push touching only them would run no CI at
+# all.
 name: ci
 
 on:
@@ -41,6 +42,7 @@ on:
     paths:
       - ".github/**"
       - "renovate.json"
+      - "scripts/**"
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -67,6 +69,7 @@ jobs:
       image: ${{ steps.classify.outputs.image }}
       dotfiles: ${{ steps.classify.outputs.dotfiles }}
       devcontainer: ${{ steps.classify.outputs.devcontainer }}
+      flatpak: ${{ steps.classify.outputs.flatpak }}
       renovate: ${{ steps.classify.outputs.renovate }}
       iso: ${{ steps.classify.outputs.iso }}
     steps:
@@ -81,7 +84,7 @@ jobs:
           set -euo pipefail
           if [ "$EVENT" = push ]; then
             # The other workflows run on push by themselves; here only lint.
-            printf '%s\n' image=false dotfiles=false devcontainer=false renovate=true iso=false | tee -a "$GITHUB_OUTPUT"
+            printf '%s\n' image=false dotfiles=false devcontainer=false flatpak=false renovate=true iso=false | tee -a "$GITHUB_OUTPUT"
             exit 0
           fi
           # Both names of a rename: moving a file out of the image's paths
@@ -90,42 +93,55 @@ jobs:
             --jq '.[] | .filename, (.previous_filename // empty)' > files.txt
           echo "changed files:"; sed 's/^/  /' files.txt
 
-          image=false dotfiles=false devcontainer=false renovate=false iso=false
+          image=false dotfiles=false devcontainer=false flatpak=false renovate=false iso=false
           while IFS= read -r f; do
             case "$f" in
               .github/workflows/ci.yml)
-                image=true; dotfiles=true; devcontainer=true; renovate=true; iso=true ;;
+                image=true; dotfiles=true; devcontainer=true; flatpak=true; renovate=true; iso=true ;;
               # used by every job that runs podman
               .github/actions/prepare-runner/*)
-                image=true; dotfiles=true; devcontainer=true; iso=true ;;
-              # scans every image before it is pushed
+                image=true; dotfiles=true; devcontainer=true; flatpak=true; iso=true ;;
+              # scans every image before it is pushed; its rules also drive
+              # the Flatpak's secret scan
               .github/actions/scan-image/*)
-                image=true; devcontainer=true; iso=true ;;
-              # pins trivy, which scans the live image and the dev container too
-              packages/binary.yaml)
-                devcontainer=true; iso=true ;;
+                image=true; devcontainer=true; flatpak=true; iso=true ;;
+              # the tools both development builds install; also pins the trivy
+              # every scan uses. The OS images are not rebuilt for a trivy
+              # bump: the live image and the dev container run the same scan.
+              devtools/tools.txt|devtools/install.sh)
+                devcontainer=true; flatpak=true; iso=true ;;
+              # the VS Code extensions both carry
+              devtools/extensions.txt)
+                devcontainer=true; flatpak=true ;;
+              # the test both development builds run
+              devtools/test.sh)
+                devcontainer=true; flatpak=true ;;
             esac
             case "$f" in
-              *.md|docs/*|home/*|dotfiles.sh|packages/flatpaks.txt|devcontainer/*|renovate.json|\
+              *.md|docs/*|home/*|dotfiles.sh|scripts/*|packages/flatpaks.txt|devtools/*|renovate.json|\
               .github/workflows/check.yml|.github/workflows/devcontainer.yml|\
-              .github/workflows/ci.yml|.github/workflows/notify.yml|\
-              .github/workflows/cleanup.yml|.github/workflows/release.yml|.github/rulesets/*) ;;
+              .github/workflows/flatpak.yml|.github/workflows/ci.yml|.github/workflows/notify.yml|\
+              .github/workflows/release.yml|.github/rulesets/*) ;;
               *) image=true ;;
             esac
             case "$f" in
-              home/*|dotfiles.sh|build_files/validate-configs.sh|.github/workflows/check.yml) dotfiles=true ;;
+              home/*|dotfiles.sh|scripts/check-dotfiles.sh|.github/workflows/check.yml) dotfiles=true ;;
             esac
             case "$f" in
-              devcontainer/*|.github/workflows/devcontainer.yml) devcontainer=true ;;
+              devtools/Containerfile|.github/workflows/devcontainer.yml) devcontainer=true ;;
+            esac
+            # flatpak.yml builds with `just flatpak`.
+            case "$f" in
+              devtools/flatpak/*|.github/workflows/flatpak.yml|Justfile) flatpak=true ;;
             esac
             case "$f" in
               renovate.json) renovate=true ;;
             esac
             # What the live ISO is made of (the `live` stage: base image,
-            # live/, the signature policy and key) and how release.yml and
+            # installer/, the signature policy and key) and how release.yml and
             # the Justfile assemble it.
             case "$f" in
-              Containerfile|.containerignore|Justfile|live/*|overlay/etc/containers/*|keys/cosign.pub|\
+              Containerfile|.containerignore|Justfile|installer/*|overlay/etc/containers/*|keys/cosign.pub|\
               .github/workflows/release.yml) iso=true ;;
             esac
           done < files.txt
@@ -133,12 +149,13 @@ jobs:
           # everything rather than trusting a truncated list.
           if [ "${CHANGED:-0}" -ge 3000 ]; then
             echo "::notice::${CHANGED} changed files, more than the API lists: running everything"
-            image=true dotfiles=true devcontainer=true renovate=true iso=true
+            image=true dotfiles=true devcontainer=true flatpak=true renovate=true iso=true
           fi
           {
             echo "image=$image"
             echo "dotfiles=$dotfiles"
             echo "devcontainer=$devcontainer"
+            echo "flatpak=$flatpak"
             echo "renovate=$renovate"
             echo "iso=$iso"
           } | tee -a "$GITHUB_OUTPUT"
@@ -171,8 +188,10 @@ jobs:
         run: |
           set -euo pipefail
           # One at a time: `bash -n a.sh b.sh` parses only a.sh.
-          for f in build_files/*.sh nvidia/nvidia.sh live/*.sh dev/*.sh .github/actions/*/*.sh \
-                   overlay/usr/libexec/fedora-bootc/xrdp-keygen; do
+          for f in image/*.sh nvidia/nvidia.sh installer/*.sh scripts/*.sh .github/actions/*/*.sh \
+                   overlay/usr/libexec/fedora-bootc/xrdp-keygen devtools/*.sh devtools/flatpak/*.sh \
+                   devtools/flatpak/code devtools/flatpak/apply_extra devtools/flatpak/host-command \
+                   devtools/flatpak/fish; do
             bash -n "$f"
           done
           sh -n dotfiles.sh
@@ -221,6 +240,14 @@ jobs:
       contents: read
       packages: write
       security-events: write
+
+  flatpak:
+    needs: changes
+    if: needs.changes.outputs.flatpak == 'true'
+    uses: ./.github/workflows/flatpak.yml
+    permissions:
+      contents: read
+      packages: write
 
   # The publishing half of build.yml and release.yml, which a pull request
   # never reaches (nothing is pushed or signed there): the same registry
@@ -362,7 +389,7 @@ jobs:
           podman images --format '{{.Repository}}:{{.Tag}} {{.Size}}' || true
 
   ci-ok:
-    needs: [changes, lint, image, dotfiles, devcontainer, signing, iso]
+    needs: [changes, lint, image, dotfiles, devcontainer, flatpak, signing, iso]
     if: always()
     runs-on: ubuntu-26.04
     timeout-minutes: 5

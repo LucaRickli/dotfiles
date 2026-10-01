@@ -1,9 +1,0 @@
-# labwc autostart. Shadows the image default at /etc/xdg/labwc/autostart
-# (labwc picks one file, it does not merge), so anything wanted from that one
-# has to be repeated here.
-
-# The Noctalia shell: bar, launcher, notifications, and the polkit agent.
-noctalia &
-
-# Secret Service for apps that expect one (VS Code, browsers).
-/usr/bin/gnome-keyring-daemon --start --components=secrets &

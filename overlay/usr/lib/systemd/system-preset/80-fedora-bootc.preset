@@ -1,4 +1,4 @@
-# Services enabled by this image. build_files/finalize.sh reads this file and
+# Services enabled by this image. image/finalize.sh reads this file and
 # applies it, so add a unit here rather than calling systemctl there.
 #
 # tailscale is installed but deliberately NOT enabled (no vendor preset

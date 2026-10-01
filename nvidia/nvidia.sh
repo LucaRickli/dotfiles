@@ -75,7 +75,7 @@ rm -rf /etc/pki/akmods/private     # the private key must not end up in the imag
 cp -a "$CTX/nvidia/overlay/." /
 
 # Early KMS: RPM Fusion ships omit_drivers for the nvidia modules; force them
-# in. build_files/initramfs.sh rebuilds the initramfs after this script and
+# in. image/initramfs.sh rebuilds the initramfs after this script and
 # verifies the modules made it in.
 sed -i 's/omit_drivers/force_drivers/' /usr/lib/dracut/dracut.conf.d/99-nvidia-dracut.conf
 

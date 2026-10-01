@@ -18,9 +18,8 @@ name: notify
 
 on:
   workflow_run:
-    # By `name:`. Only what runs unattended; cleanup is started by hand, and
-    # GitHub already tells whoever started it.
-    workflows: [build, check, devcontainer, release, ci]
+    # By `name:`. Only what runs unattended.
+    workflows: [build, check, devcontainer, flatpak, release, ci]
     types: [completed]
     branches: [main]
 

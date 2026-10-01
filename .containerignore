@@ -1,6 +1,6 @@
-# Kept out of the build context. The Containerfile COPYs only build_files/,
-# packages/, nvidia/, live/, overlay/ and keys/cosign.pub; the Secure Boot key
-# material enters via `podman build --secret`, never via the context.
+# Kept out of the build context. The Containerfile COPYs only image/,
+# packages/, nvidia/, installer/, overlay/ and keys/cosign.pub; the Secure
+# Boot key material enters via `podman build --secret`, never via the context.
 #
 # home/ and dotfiles.sh are listed first on purpose: the dotfiles are NOT part
 # of any image and must never become part of one. Excluding them here means a
@@ -18,10 +18,8 @@ docs
 Justfile
 renovate.json
 repart.d
-
-# CI drops the verified bm bundle in the workspace (build.yml); it enters the
-# build as a `podman build --volume`, never through the context.
-bundle.tar
+# the dev container and the VS Code Flatpak, built from their own directory
+devtools
 
 # keys/ holds private key material (git-ignored *.key), so the whole directory
 # stays out of the build context. The one exception is the cosign PUBLIC key:

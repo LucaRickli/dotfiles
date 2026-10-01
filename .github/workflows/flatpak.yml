@@ -1,0 +1,83 @@
+# Build the VS Code Flatpak (devtools/flatpak/) and push it to
+# ghcr.io/<owner>/code as an OCI image, :latest and :<yyyymmdd>, for a Flatpak
+# remote kept elsewhere to point at. Nothing here installs it anywhere; `just
+# flatpak-install` tries a local build. No schedule: every new image is a full
+# download for every machine that follows it (~750 MB, no deltas), so it is
+# only rebuilt when something in it changes, which Renovate's weekly PR
+# usually does. Pull requests get it through ci.yml, the PR gate, and only
+# build and test; the Justfile recipe, devtools/test.sh and the secret scan
+# rules (.github/actions/scan-image) are tested there too, but a push of only
+# those pushes nothing.
+name: flatpak
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "devtools/flatpak/**"
+      - "devtools/tools.txt"
+      - "devtools/extensions.txt"
+      - "devtools/install.sh"
+      - ".github/workflows/flatpak.yml"
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: flatpak-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Everything that downloads or runs third-party code (the tools, the
+  # runtime, VS Code in the test) happens here, before the registry login.
+  # The token can write packages (the push) but not the repository.
+  build:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Prepare the runner
+        uses: ./.github/actions/prepare-runner
+        with:
+          need: "25"
+          pull: quay.io/fedora/fedora:latest
+
+      - name: Install just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: "1.58.0"
+
+      # Builds, installs the result the way a machine does (VS Code comes from
+      # Microsoft right there) and runs devtools/test.sh inside it.
+      - name: Build and test
+        run: just flatpak
+
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # skopeo copies the manifest byte for byte, so the digest in the summary
+      # is the one a remote's index names.
+      - name: Push
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/code"
+          skopeo copy --retry-times 3 --digestfile "${RUNNER_TEMP}/digest" \
+            oci:output/flatpak/oci "docker://${image}:latest"
+          skopeo copy --retry-times 3 oci:output/flatpak/oci "docker://${image}:$(date -u +%Y%m%d)"
+          echo "Pushed \`${image}@$(cat "${RUNNER_TEMP}/digest")\`" >> "$GITHUB_STEP_SUMMARY"

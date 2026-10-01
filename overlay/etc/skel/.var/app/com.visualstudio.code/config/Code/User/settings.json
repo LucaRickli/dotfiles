@@ -1,6 +1,0 @@
-{
-    // Dev Containers runs the host's rootless podman: "podman" inside the
-    // Flatpak is the host-spawn wrapper in
-    // ~/.var/app/com.visualstudio.code/data/node_modules/bin/.
-    "dev.containers.dockerPath": "podman"
-}

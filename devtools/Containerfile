@@ -1,0 +1,122 @@
+# ghcr.io/lucarickli/devcontainer: the development tools from tools.txt (Go,
+# Deno, Rust and Protocol Buffers with their tooling, the Kubernetes and Talos
+# CLIs, fish, ...) and the VS Code extensions from extensions.txt, for VS Code
+# Dev Containers and for `toolbox create --image`. The VS Code Flatpak
+# (flatpak/) carries the same. x86_64 only.
+#
+# Works without internet once the image is local: the language servers and
+# linters are in the image, and so are the VS Code extensions for them.
+# (The VS Code Server itself comes from the client; see the README.)
+#
+# install.sh checks every tool and extension (upstream's sha256, or a pinned
+# one where upstream publishes none), the throwaway VS Code Server below is
+# checked against its update API's hash.
+
+# tools.txt, extensions.txt and install.sh, for the RUNs below. Bound from a
+# stage rather than straight from the build context: on an SELinux host,
+# podman relabels a stage mount for the build container, a context file keeps
+# its home label and cannot be read.
+FROM scratch AS devtools
+COPY tools.txt extensions.txt install.sh /
+
+# --- VS Code extensions, installed with a throwaway VS Code Server ------------
+# Those in extensions.txt. Only the resulting extensions directory is copied
+# into the image. It does not depend on the server version: any client VS Code
+# that satisfies the extensions' `engines` uses them.
+FROM registry.fedoraproject.org/fedora-toolbox:44 AS vscode-extensions
+# renovate: datasource=github-releases depName=microsoft/vscode
+ARG VSCODE_VERSION=1.139.1
+ARG DEV_HOME=/var/home/dev
+RUN --mount=type=bind,from=devtools,source=/,target=/run/devtools \
+    set -eux; dnf -y install jq unzip; cd /tmp; \
+    /run/devtools/install.sh --list /run/devtools/extensions.txt /tmp/ext; \
+    info=$(curl -fsSL "https://update.code.visualstudio.com/api/versions/${VSCODE_VERSION}/server-linux-x64/stable"); \
+    commit=$(echo "$info" | jq -r .version); \
+    sha=$(echo "$info" | jq -r .sha256hash); \
+    curl -fsSLo server.tgz "https://update.code.visualstudio.com/commit:${commit}/server-linux-x64/stable"; \
+    echo "${sha}  server.tgz" | sha256sum -c -; \
+    mkdir server; tar -xzf server.tgz --strip-components=1 -C server; \
+    for vsix in /tmp/ext/share/vscode/vsix/*.vsix; do \
+        HOME=/tmp/home ./server/bin/code-server --accept-server-license-terms \
+            --extensions-dir "${DEV_HOME}/.vscode-server/extensions" --install-extension "$vsix"; \
+    done; \
+    for id in $(awk '!/^#/ && NF { print $1 }' /run/devtools/extensions.txt); do \
+        ls -d "${DEV_HOME}/.vscode-server/extensions/${id}-"*; \
+    done
+
+FROM registry.fedoraproject.org/fedora-toolbox:44
+
+# Fixed, not tunable: the COPY and the label below use them literally.
+ARG DEV_USER=dev
+ARG DEV_UID=59999
+
+# C toolchain (the linker for rustc, and cgo), openssl headers for
+# openssl-sys, the CLI tools tools.txt leaves to the distribution (the
+# Flatpak's Sdk has them too), and unzip for install.sh.
+RUN dnf -y --setopt=install_weak_deps=False install \
+        gcc gcc-c++ make pkgconf-pkg-config openssl-devel \
+        jq git-lfs strace unzip \
+    && dnf clean all && rm -rf /var/cache/dnf /var/cache/libdnf5
+
+ENV LANG=C.UTF-8 \
+    PATH=/usr/local/go/bin:/usr/local/cargo/bin:/usr/local/bin:/usr/bin \
+    RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    DENO_NO_UPDATE_CHECK=1
+
+# The tools, into /usr/local (install.sh; Go in go/, Rust in rustup/ and
+# cargo/). fish also at /usr/bin/fish: toolbox starts the host user's login
+# shell by its host path. Go from upstream rather than Fedora's golang, which
+# lags a release and defaults to GOTOOLCHAIN=local. The Rust homes are
+# world-writable, like the official rust image's, so that `rustup target add`
+# and `cargo install` work for whoever runs the container (a remapped dev
+# user, or the toolbox user), which owns neither.
+RUN --mount=type=bind,from=devtools,source=/,target=/run/devtools \
+    /run/devtools/install.sh /usr/local \
+    && chmod -R a+w "${RUSTUP_HOME}" "${CARGO_HOME}" \
+    && ln -s /usr/local/bin/fish /usr/bin/fish
+
+# Per-user bin dirs of `go install` and `deno install -g`, for login shells
+# (Dev Containers probes the environment through one).
+RUN printf '%s\n' \
+    'for d in "$HOME/go/bin" "$HOME/.deno/bin"; do' \
+    '    case ":$PATH:" in *":$d:"*) ;; *) PATH="$PATH:$d" ;; esac' \
+    'done' \
+    'export PATH' > /etc/profile.d/devcontainer-path.sh
+
+# The Dev Containers user. updateRemoteUserUID rewrites its UID to the host
+# user's when a dev container is created (with podman the CLI also adds
+# --userns=keep-id), so workspace files stay yours. Two constraints come from
+# toolbox, which creates its own user from the host at runtime:
+# - the home is not under /home: on hosts where /home is a symlink (bootc,
+#   ostree) toolbox replaces /home and fails if it is not empty;
+# - the UID is not 1000: toolbox runs `useradd --uid <host uid>` without -o.
+RUN set -eux; \
+    mkdir -p /var/home; \
+    groupadd --gid "${DEV_UID}" "${DEV_USER}"; \
+    useradd --uid "${DEV_UID}" --gid "${DEV_UID}" --groups wheel \
+        --home-dir "/var/home/${DEV_USER}" --create-home --shell /bin/bash "${DEV_USER}"; \
+    echo "${DEV_USER} ALL=(ALL) NOPASSWD: ALL" > "/etc/sudoers.d/${DEV_USER}"; \
+    chmod 0440 "/etc/sudoers.d/${DEV_USER}"
+
+COPY --from=vscode-extensions --chown=59999:59999 \
+    /var/home/dev/.vscode-server /var/home/dev/.vscode-server
+
+# No USER and no ENTRYPOINT: toolbox forces --user root:root and passes its
+# init command as CMD.
+#
+# devcontainer.metadata makes `"image": "ghcr.io/lucarickli/devcontainer"`
+# enough in a project's devcontainer.json. The extensions listed are already
+# installed, so offline they are a no-op. checkForUpdates=local keeps the Go
+# extension from asking the module proxy about tool versions.
+# The org.opencontainers labels replace the ones inherited from fedora-toolbox
+# (a derived image cannot unset a label, only override it).
+# com.github.containers.toolbox=true is inherited and must stay.
+LABEL org.opencontainers.image.title="devcontainer" \
+      org.opencontainers.image.description="Go, Deno, Rust, Protocol Buffers and Kubernetes dev container (VS Code Dev Containers, toolbox)" \
+      org.opencontainers.image.source="https://github.com/lucarickli/dotfiles" \
+      org.opencontainers.image.url="https://github.com/lucarickli/dotfiles" \
+      org.opencontainers.image.vendor="" \
+      org.opencontainers.image.version="" \
+      org.opencontainers.image.licenses="" \
+      devcontainer.metadata='[{"remoteUser":"dev","customizations":{"vscode":{"extensions":["golang.go","denoland.vscode-deno","rust-lang.rust-analyzer","bufbuild.vscode-buf"],"settings":{"go.toolsManagement.checkForUpdates":"local","go.toolsManagement.autoUpdate":false,"go.survey.prompt":false,"files.watcherExclude":{"**/target/**":true}}}}}]'

@@ -70,7 +70,8 @@
     },
     {
       "matchDatasources": [
-        "github-releases"
+        "github-releases",
+        "github-release-attachments"
       ],
       "addLabels": [
         "renovate/github-release"
@@ -122,6 +123,7 @@
       "description": "Automerged updates wait 3 days after their release, so a broken or pulled release is usually gone before it is merged. Only for datasources that report release times: without one (e.g. the chunkah digest on quay.io) Renovate would hold the update forever",
       "matchDatasources": [
         "github-releases",
+        "github-release-attachments",
         "github-tags",
         "npm",
         "go",
@@ -194,7 +196,7 @@
       "description": "Fedora release the images are built on: the base image tags (Containerfiles, Justfile) and the release named in the README",
       "managerFilePatterns": [
         "/^Containerfile$/",
-        "/^devcontainer/Containerfile$/",
+        "/^devtools/Containerfile$/",
         "/^Justfile$/",
         "/^README\\.md$/"
       ],
@@ -218,53 +220,25 @@
     },
     {
       "customType": "regex",
-      "description": "GitHub releases pinned in packages/binary.yaml (bm)",
+      "description": "The development tools and VS Code extensions in devtools/tools.txt and extensions.txt: the line under each '# renovate:' comment is 'name version asset checksum members'. A checksum of sha256:<hex> (releases that publish none) is the digest the github-release-attachments datasource bumps with the version",
       "managerFilePatterns": [
-        "/^packages/binary\\.yaml$/"
+        "/^devtools/tools\\.txt$/",
+        "/^devtools/extensions\\.txt$/"
       ],
       "matchStrings": [
-        "https:\\/\\/github.com\\/(?<depName>\\S+?\\/\\S+?)\\/releases\\/download\\/(?<currentValue>(v|\\d)\\S+?)\\/\\S+"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?(?: extractVersion=(?<extractVersion>\\S+))?\\n\\S+ (?<currentValue>\\S+) \\S+ (?:sha256:(?<currentDigest>[0-9a-f]{64})|\\S+)"
       ],
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver",
-      "extractVersionTemplate": "^(?<version>.*)$"
+      "extractVersionTemplate": "{{#if extractVersion}}{{{extractVersion}}}{{else}}^(?<version>.+)${{/if}}"
     },
     {
       "customType": "regex",
-      "description": "Helm CDN",
+      "description": "Versions in the dev container's Containerfile (ARG lines) and the Flatpak's build script (VAR=value lines) under a '# renovate:' comment",
       "managerFilePatterns": [
-        "/^packages/binary\\.yaml$/"
+        "/^devtools/Containerfile$/",
+        "/^devtools/flatpak/build\\.sh$/"
       ],
       "matchStrings": [
-        "https:\\/\\/get\\.helm\\.sh\\/helm-v(?<currentValue>[^-]+)-linux-amd64\\.tar\\.gz"
-      ],
-      "depNameTemplate": "helm/helm",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver",
-      "autoReplaceStringTemplate": "https://get.helm.sh/helm-v{{{newValue}}}-linux-amd64.tar.gz"
-    },
-    {
-      "customType": "regex",
-      "description": "kubectl CDN",
-      "managerFilePatterns": [
-        "/^packages/binary\\.yaml$/"
-      ],
-      "matchStrings": [
-        "https:\\/\\/dl\\.k8s\\.io\\/release\\/v(?<currentValue>[^\\/]+)\\/bin\\/linux\\/amd64\\/kubectl"
-      ],
-      "depNameTemplate": "kubernetes/kubernetes",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "semver",
-      "autoReplaceStringTemplate": "https://dl.k8s.io/release/v{{{newValue}}}/bin/linux/amd64/kubectl"
-    },
-    {
-      "customType": "regex",
-      "description": "Tool versions in devcontainer/Containerfile: ARG lines under a '# renovate:' comment",
-      "managerFilePatterns": [
-        "/^devcontainer/Containerfile$/"
-      ],
-      "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\s+ARG [A-Z0-9_]+=(?<currentValue>\\S+)"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\s+(?:ARG )?[A-Z0-9_]+=(?<currentValue>\\S+)"
       ],
       "extractVersionTemplate": "{{#if extractVersion}}{{{extractVersion}}}{{else}}^(?<version>.+)${{/if}}"
     },

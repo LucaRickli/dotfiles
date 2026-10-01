@@ -1,14 +1,18 @@
-# Build the development container (devcontainer/) and push it to
+# Build the development container (devtools/Containerfile) and push it to
 # ghcr.io/<owner>/devcontainer as :latest and :<yyyymmdd>. Weekly as well, so
 # the Fedora packages in it stay current without a commit. Pull requests get
-# it through ci.yml, the PR gate, and only build, smoke-test and scan.
+# it through ci.yml, the PR gate, and only build, test and scan.
 name: devcontainer
 
 on:
   push:
     branches: [main]
     paths:
-      - "devcontainer/**"
+      - "devtools/Containerfile"
+      - "devtools/tools.txt"
+      - "devtools/extensions.txt"
+      - "devtools/install.sh"
+      - "devtools/test.sh"
       - ".github/workflows/devcontainer.yml"
       - ".github/actions/**"
   schedule:
@@ -44,27 +48,25 @@ jobs:
         uses: ./.github/actions/prepare-runner
         with:
           need: "25"
-          pull-from: devcontainer/Containerfile
+          pull-from: devtools/Containerfile
 
       - name: Build
-        run: podman build --pull=newer -t "$LOCAL" devcontainer/
+        run: podman build --pull=newer -t "$LOCAL" devtools/
 
-      # The toolchains run, and the VS Code extensions are in place for the
-      # user Dev Containers connects as.
-      - name: Smoke test
+      # Every tool runs and the toolchains build (devtools/test.sh, the same
+      # test the Flatpak gets), and the VS Code extensions are in place, for
+      # the user Dev Containers connects as.
+      - name: Test
         run: |
+          podman run --rm --user dev -v "$PWD/devtools/test.sh":/run/test.sh:ro "$LOCAL" bash -l /run/test.sh
           podman run --rm --user dev "$LOCAL" bash -lc '
             set -eux
-            go version; gopls version; dlv version; staticcheck -version
-            golangci-lint version; gofumpt -version
-            deno --version
-            rustc --version; cargo --version; cargo clippy --version; rust-analyzer --version
             ls ~/.vscode-server/extensions | grep -E "^golang\.go-"
             ls ~/.vscode-server/extensions | grep -E "^denoland\.vscode-deno-"
             ls ~/.vscode-server/extensions | grep -E "^rust-lang\.rust-analyzer-"'
 
       # Before the push (.github/actions/scan-image). Everything outside
-      # Fedora's packages is a pinned upstream release: the toolchains under
+      # Fedora's packages is a pinned upstream release: the tools under
       # /usr/local and the VS Code extensions.
       - name: Scan
         uses: ./.github/actions/scan-image

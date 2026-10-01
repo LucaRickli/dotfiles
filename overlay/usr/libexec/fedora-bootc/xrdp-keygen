@@ -7,7 +7,7 @@
 #
 # The xrdp package creates them in its %posttrans, which on an image-based
 # system runs inside the image build, so they would be the same on every
-# machine and published with the image. build.sh deletes them from the image
+# machine and published with the image. packages.sh deletes them from the image
 # and this creates them per machine, with the package's own commands.
 #
 # A certificate whose subject is exactly CN=XRDP comes from that scriptlet (it

@@ -7,10 +7,11 @@
 #   UPSTREAM="usr/local/ var/home/dev/.vscode-server/" \
 #       .github/actions/scan-image/scan.sh localhost/devcontainer:latest
 #
-# Needs rootless podman, jq and yq (either flavour), and trivy on PATH or in
-# $TRIVY. Optional outputs, for action.yml: $SARIF, the findings that need
-# action as a code scanning report (sarif.jq); $RESULT, "pass" or "fail",
-# written only when the scan completed.
+# Needs rootless podman, jq, and trivy on PATH or in $TRIVY
+# (devtools/install.sh PREFIX trivy fetches the pinned one). Optional outputs,
+# for action.yml: $SARIF, the findings that need action as a code scanning
+# report (sarif.jq); $RESULT, "pass" or "fail", written only when the scan
+# completed.
 #
 # Fails on what must not be published:
 #   - a secret anywhere in the image (trivy's rules plus trivy-secret.yaml)
@@ -29,13 +30,12 @@
 # neither complete (it sees nothing in C code, sshd, the kernel) nor reliable.
 # Fedora's own advisories are.
 #
-# Upstream releases are the bm binaries (packages/binary.yaml) plus the paths
-# in $UPSTREAM (space- or newline-separated prefixes, no leading slash: the
-# dev container's toolchains, the live image's Flatpaks). Each is someone
-# else's build, kept current by Renovate, by hand or by its remote: their
-# findings are for upstream to fix, and failing on them would only hold back
-# every other update until upstream ships.
-# shellcheck disable=SC2016  # jq, yq and awk programs, single-quoted on purpose
+# Upstream releases are the paths in $UPSTREAM (space- or newline-separated
+# prefixes, no leading slash: the dev container's tools, the live image's
+# Flatpaks). Each is someone else's build, kept current by Renovate, by hand
+# or by its remote: their findings are for upstream to fix, and failing on
+# them would only hold back every other update until upstream ships.
+# shellcheck disable=SC2016  # jq and awk programs, single-quoted on purpose
 set -euo pipefail
 
 image=${1:?usage: scan.sh <local image>}
@@ -93,8 +93,6 @@ jq -r '.Results[]? | .Target as $t | .Secrets[]?
 # repository (/sysroot/ostree), whose objects duplicate files that are also in
 # the image under their real paths, so those are dropped; the rest are asked
 # of the image's own rpm database.
-yq -r '.releases[] | .dst as $d | .assets[] | $d + "/" + .dst' packages/binary.yaml \
-    | sed 's|^/||' > "$work/bm.txt"
 # shellcheck disable=SC2086  # split into one prefix per line on purpose
 printf '%s\n' ${UPSTREAM:-} > "$work/upstream.txt"
 cut -f1 "$work/vulns.tsv" | grep -v '^sysroot/ostree/' | sort -u > "$work/paths.txt" || true
@@ -108,18 +106,16 @@ podman run --rm -i --pull=never --network=none --entrypoint /usr/bin/bash "$imag
     done' < "$work/paths.txt" > "$work/owners.tsv"
 # Prefixes each row with its class: rpm, upstream or image.
 awk -F'\t' -v OFS='\t' '
-    FILENAME == ARGV[1] { bm[$1] = 1; next }
-    FILENAME == ARGV[2] { if ($1 != "") prefix[$1] = 1; next }
-    FILENAME == ARGV[3] { owner[$1] = $2; next }
+    FILENAME == ARGV[1] { if ($1 != "") prefix[$1] = 1; next }
+    FILENAME == ARGV[2] { owner[$1] = $2; next }
     $1 ~ /^sysroot\/ostree\// { next }
     {
         class = "image"
         if (owner[$1] != "" && owner[$1] != "-") class = "rpm"
-        else if ($1 in bm) class = "upstream"
         else for (p in prefix) if (index($1, p) == 1) class = "upstream"
         print class, $0
     }
-' "$work/bm.txt" "$work/upstream.txt" "$work/owners.tsv" "$work/vulns.tsv" > "$work/classified.tsv"
+' "$work/upstream.txt" "$work/owners.tsv" "$work/vulns.tsv" > "$work/classified.tsv"
 
 # --- dnf: Fedora security updates the image does not contain -----------------
 # The updates repo only: it carries Fedora's advisories, and a third-party
@@ -166,7 +162,7 @@ fi
     echo "| Vulnerabilities in files the image adds itself | $n_image_crit critical with a fix, $n_image_high high | critical with a fix |"
     echo "| Fedora security updates not in the image yet | $n_fedora_crit critical, $n_fedora_imp important | critical |"
     echo "| trivy on RPM binaries (Fedora's advisories are what counts) | $n_rpm | never |"
-    echo "| trivy on upstream releases (bm binaries, toolchains, Flatpaks) | $n_upstream | never |"
+    echo "| trivy on upstream releases (dev tools, Flatpaks) | $n_upstream | never |"
     if [ "$n_secrets" != 0 ]; then
         echo
         echo "**Secrets**"

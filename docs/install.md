@@ -32,7 +32,7 @@ wizard opens by itself.
   boot ([secureboot-tpm2.md](secureboot-tpm2.md)).
 - **Create your user in the wizard.** Nothing else creates one.
 - **If the install fails**, the error is in the log (the wizard's shims for
-  this image: [`live/configure-installer.sh`](../live/configure-installer.sh)):
+  this image: [`installer/configure-installer.sh`](../installer/configure-installer.sh)):
 
   ```sh
   cat ~/.cache/bootc-installer/fisherman-output.log   # as liveuser
@@ -145,7 +145,7 @@ useradd -m -G wheel <name>
 passwd <name>
 ```
 
-To add one offline instead, follow [`dev/add-demo-user.sh`](../dev/add-demo-user.sh)
+To add one offline instead, follow [`scripts/vm-demo-user.sh`](../scripts/vm-demo-user.sh)
 (a composefs deployment has no `/usr` to chroot into).
 
 ## First boot

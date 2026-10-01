@@ -4,9 +4,10 @@
 #   flatpak install -y flathub $(grep -vE '^\s*(#|$)' packages/flatpaks.txt)
 #
 # One app ID per line, nothing after it. Bazaar is the GUI for everything else.
+# VS Code with the development tools is this repository's own Flatpak
+# (devtools/flatpak/), installed separately.
 # Remote Desktop Manager is not on Flathub; the image ships Devolutions' remote:
 #   flatpak install devolutions com.devolutions.remotedesktopmanager
 io.github.kolunmi.Bazaar
 org.mozilla.firefox
-com.visualstudio.code
 org.remmina.Remmina

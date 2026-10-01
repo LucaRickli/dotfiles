@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# /app/bin/code: VS Code, with the tools from devtools/tools.txt on PATH.
+set -e
+
+# Where `go install`, `cargo install` and `deno install -g` put what they
+# build; the toolchains themselves are read-only in /app.
+export PATH=$PATH:$HOME/go/bin:${CARGO_HOME:-$HOME/.cargo}/bin:$HOME/.deno/bin
+# sops would look in $XDG_CONFIG_HOME, which flatpak points at this app's own
+# directory, not at ~/.config where the key is.
+export SOPS_AGE_KEY_FILE=${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}
+
+# A new profile starts with Dev Containers on the host's podman (/app/bin/podman
+# runs it through host-spawn) and the Go extension using the gopls and tools
+# in /app instead of fetching its own (the dev container's settings too). An
+# existing settings.json is left alone.
+settings=$XDG_CONFIG_HOME/Code/User/settings.json
+if [ ! -e "$settings" ]; then
+    mkdir -p "${settings%/*}"
+    cat >"$settings" <<'JSON'
+{
+    "dev.containers.dockerPath": "podman",
+    "go.toolsManagement.checkForUpdates": "local",
+    "go.toolsManagement.autoUpdate": false,
+    "go.survey.prompt": false,
+    "files.watcherExclude": { "**/target/**": true }
+}
+JSON
+fi
+
+# What VS Code's own bin/code does, through zypak (from the Electron BaseApp),
+# which gives Chromium its sandbox inside flatpak's.
+code=(env ELECTRON_RUN_AS_NODE=1 /app/bin/zypak-wrapper.sh /app/extra/vscode/code
+    /app/extra/vscode/resources/app/out/cli.js
+    --extensions-dir="$XDG_DATA_HOME/vscode/extensions")
+
+# Extensions, installed into the profile once each and yours from then on:
+# the Marketplace updates them, and one you remove stays removed. The
+# language ones (devtools/extensions.txt) and Dev Containers come from the
+# Marketplace by id; only when that fails (offline) do the language ones come
+# from the copies in /app/share/vscode/vsix, which VS Code keeps at their
+# version until you update them. Dev Containers is never bundled, as
+# Microsoft's license keeps it out of anything but VS Code's own download;
+# offline it is tried again on the next start. The first start takes a few
+# seconds longer.
+offered=$XDG_DATA_HOME/vscode/extensions-offered
+ids=(ms-vscode-remote.remote-containers) todo=()
+for vsix in /app/share/vscode/vsix/*.vsix; do ids+=("$(basename "$vsix" .vsix)"); done
+for id in "${ids[@]}"; do
+    grep -qxF "$id" "$offered" 2>/dev/null || todo+=("$id")
+done
+if [ ${#todo[@]} -gt 0 ]; then
+    args=()
+    for id in "${todo[@]}"; do args+=(--install-extension "$id"); done
+    "${code[@]}" "${args[@]}" >&2 || true
+    installed=$("${code[@]}" --list-extensions 2>/dev/null || true)
+    for id in "${todo[@]}"; do
+        vsix=/app/share/vscode/vsix/$id.vsix
+        if grep -qixF "$id" <<<"$installed" ||
+            { [ -e "$vsix" ] && "${code[@]}" --install-extension "$vsix" >&2; }; then
+            echo "$id" >>"$offered"
+        fi
+    done
+fi
+
+exec "${code[@]}" "$@"

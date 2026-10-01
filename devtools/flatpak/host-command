@@ -1,0 +1,5 @@
+#!/bin/sh
+# /app/bin/podman and /app/bin/docker: the host's podman and docker, for Dev
+# Containers and the terminal. host-spawn talks to flatpak's session helper
+# (--talk-name=org.freedesktop.Flatpak).
+exec /app/bin/host-spawn "${0##*/}" "$@"

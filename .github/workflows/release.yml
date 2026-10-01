@@ -152,10 +152,11 @@ jobs:
           # what `just iso` assembles the ISO in
           pull: quay.io/fedora/fedora:latest
 
-      # The ISO is assembled by live/build-iso.sh inside a Fedora container,
-      # so the runner needs nothing but podman and just (not preinstalled).
-      # just itself is pinned too (Renovate bumps it through the PR gate),
-      # instead of whatever release is newest when the release runs.
+      # The ISO is assembled by installer/build-iso.sh inside a Fedora
+      # container, so the runner needs nothing but podman and just (not
+      # preinstalled). just itself is pinned too (Renovate bumps it through
+      # the PR gate), instead of whatever release is newest when the release
+      # runs.
       - name: Install just
         uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
         with:
@@ -164,7 +165,7 @@ jobs:
       # No Secure Boot key here on purpose. The live image signs nothing:
       # `--target live` never builds the stages that would need one, and the
       # ISO deliberately ships no shim, so it does not boot under Secure Boot
-      # at all (live/prepare-live.sh has the why).
+      # at all (installer/prepare-live.sh has the why).
       # `just iso` builds the live image (localhost/fedora-bootc:live) and
       # assembles the ISO from it. The steps below scan, push and sign that
       # same image: building it a second time could pick up a newer base and
@@ -182,8 +183,8 @@ jobs:
 
       # Before the push, like every image, and before the login, so trivy
       # never runs next to the token (.github/actions/scan-image). The
-      # installer Flatpak (pinned in live/) and its runtime (from Flathub at
-      # build time) are upstream builds.
+      # installer Flatpak (pinned in installer/) and its runtime (from Flathub
+      # at build time) are upstream builds.
       - name: Scan the live image
         uses: ./.github/actions/scan-image
         with:
@@ -294,8 +295,8 @@ jobs:
 
           Those five are the only tags that move, and this release is what
           they now point at. The install ISO deploys \`latest-uki\`. Until ten
-          newer builds replace it, this build also has a tag of its own, for
-          testing exactly this one:
+          newer build images (about two builds) replace it, this build also has
+          a tag of its own, for testing exactly this one:
 
               sudo bootc switch ${registry}/${IMAGE_NAME}:build-${GITHUB_SHA:0:7}-uki
 

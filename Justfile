@@ -90,16 +90,16 @@ build-live:
     podman build --pull=newer --cap-add=sys_admin --security-opt label=disable \
         --target live -t {{image}}:live .
 
-# Runs live/build-iso.sh inside a Fedora container with the :live image mounted
-# read-only at /rootfs. `--mount type=image` needs no export or unpack and
-# works rootless, so there is no sudo and no copy into root storage. CI runs
-# exactly this recipe.
+# Runs installer/build-iso.sh inside a Fedora container with the :live image
+# mounted read-only at /rootfs. `--mount type=image` needs no export or unpack
+# and works rootless, so there is no sudo and no copy into root storage. CI
+# runs exactly this recipe.
 #
 # Build the live install ISO into output/
 iso: build-live
     mkdir -p output
     podman run --rm --security-opt label=disable \
-        -v "$(pwd)/live/build-iso.sh":/src/build-iso.sh:ro \
+        -v "$(pwd)/installer/build-iso.sh":/src/build-iso.sh:ro \
         --mount type=image,source={{image}}:live,dst=/rootfs \
         -v "$(pwd)/output":/output \
         quay.io/fedora/fedora:latest /src/build-iso.sh
@@ -108,24 +108,52 @@ iso: build-live
 #
 # Build the dev container: localhost/devcontainer:latest
 devcontainer:
-    podman build --pull=newer -t localhost/devcontainer:latest devcontainer/
+    podman build --pull=newer -t localhost/devcontainer:latest devtools/
+
+# Runs devtools/flatpak/build.sh inside a Fedora container, which then
+# installs the app and runs devtools/test.sh in it (VS Code itself is
+# downloaded from Microsoft for that). Privileged for flatpak's own sandbox.
+# Nothing touches your own Flatpak installations, and only the two
+# directories it reads are mounted, never keys/. CI runs exactly this recipe
+# (.github/workflows/flatpak.yml) and pushes output/flatpak/oci.
+#
+# Build and test the VS Code Flatpak into output/flatpak/
+flatpak:
+    mkdir -p output/flatpak
+    podman run --rm --privileged --security-opt label=disable \
+        -v "$(pwd)/devtools":/src/devtools:ro \
+        -v "$(pwd)/.github/actions/scan-image":/src/.github/actions/scan-image:ro \
+        -v "$(pwd)/output/flatpak":/out \
+        quay.io/fedora/fedora:latest /src/devtools/flatpak/build.sh
+
+# What `just flatpak` built, the same OCI image CI pushes, into your own user
+# installation; VS Code itself is downloaded from Microsoft at install, as on
+# any machine. Run it again after a new build to replace it. The runtime
+# comes from Flathub, added as a user remote if it is not one yet. Remove
+# with `flatpak uninstall --user io.github.lucarickli.Code`.
+#
+# Install the local VS Code Flatpak build for your user
+flatpak-install:
+    test -d output/flatpak/oci || { echo "Nothing built yet: run just flatpak first"; exit 1; }
+    flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+    flatpak install --user -y --reinstall "oci:$(pwd)/output/flatpak/oci"
 
 # Needs niri, noctalia, ghostty, fish and jq installed; `check-image` needs
 # none of them.
 #
 # Validate the dotfiles + scripts on the host, without building
 check:
-    build_files/validate-configs.sh home/.config
+    scripts/check-dotfiles.sh home/.config
     # one at a time: `bash -n a.sh b.sh` parses only a.sh (b.sh becomes $1)
-    for f in build_files/*.sh nvidia/nvidia.sh live/*.sh dev/*.sh .github/actions/*/*.sh overlay/usr/libexec/fedora-bootc/xrdp-keygen; do bash -n "$f"; done
+    for f in image/*.sh nvidia/nvidia.sh installer/*.sh scripts/*.sh .github/actions/*/*.sh overlay/usr/libexec/fedora-bootc/xrdp-keygen devtools/*.sh devtools/flatpak/*.sh devtools/flatpak/code devtools/flatpak/apply_extra devtools/flatpak/host-command devtools/flatpak/fish; do bash -n "$f"; done
     sh -n dotfiles.sh
 
 # Validate the dotfiles inside the built image (the image has all the tools)
 check-image tag=tag:
     podman run --rm \
-        -v ./build_files/validate-configs.sh:/run/validate-configs.sh:ro \
+        -v ./scripts/check-dotfiles.sh:/run/check-dotfiles.sh:ro \
         -v ./home/.config:/run/dotfiles:ro \
-        {{image}}:{{tag}} bash /run/validate-configs.sh /run/dotfiles
+        {{image}}:{{tag}} bash /run/check-dotfiles.sh /run/dotfiles
 
 # Runs the wizard's user step against a deployment built out of the installed
 # image's own /etc: first the failure the shim exists for (exit 12, no home
@@ -136,8 +164,8 @@ check-image tag=tag:
 # against the live image's /etc.
 #
 # Reproduce the wizard's user step, and the shim that makes it work
-test-useradd-shim target="ghcr.io/lucarickli/fedora-bootc:latest-uki":
-    dev/test-useradd-shim.sh {{target}}
+test-installer-useradd target="ghcr.io/lucarickli/fedora-bootc:latest-uki":
+    scripts/test-installer-useradd.sh {{target}}
 
 # Poke around inside a built image without booting it
 shell tag=tag:
@@ -168,7 +196,7 @@ qcow2 tag=tag:
 # Lets `just vm` get past the greeter. The account goes on THAT DISK ONLY: it
 # is written after the install, into the deployment's writable /etc and /var;
 # the image, pushed tags, ISOs and machines are never touched. See
-# dev/add-demo-user.sh for why writing there is safe.
+# scripts/vm-demo-user.sh for why writing there is safe.
 #
 # The password is a throwaway in a `wheel` account, passed on the command
 # line and written to a file under output/. Treat the disk as compromised and
@@ -180,14 +208,14 @@ qcow2 tag=tag:
 demo-user user="demo" password="demo" disk="output/disk.qcow2":
     test -f {{disk}} || { echo "No {{disk}}. Run 'just qcow2' first."; exit 1; }
     rm -rf output/.demo-user && mkdir -p output/.demo-user
-    cp dev/add-demo-user.sh output/.demo-user/
+    cp scripts/vm-demo-user.sh output/.demo-user/
     printf '%s\n%s\n' '{{user}}' '{{password}}' > output/.demo-user/params
     # A throwaway VM booted from the image itself is the cheapest root shell
     # with btrfs and shadow tooling next to the disk: no sudo, no loopback.
     bcvk ephemeral run --rm \
         --mount-disk-file {{disk}}:target \
         --bind "$(pwd)/output/.demo-user:demo" \
-        --execute /run/virtiofs-mnt-demo/add-demo-user.sh \
+        --execute /run/virtiofs-mnt-demo/vm-demo-user.sh \
         {{image}}:{{tag}}
     cat output/.demo-user/result
     grep -q '^OK' output/.demo-user/result

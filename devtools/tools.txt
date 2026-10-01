@@ -1,0 +1,105 @@
+# The development tools, pinned. install.sh installs them into a prefix: the
+# dev container (/usr/local) and the VS Code Flatpak (/app) get the same set.
+# Renovate bumps the versions (renovate.json, the "devtools" manager reads the
+# comment above each line).
+#
+#   name  version  asset  checksum  members
+#
+# version   the upstream tag as published; {v} below is it verbatim, {n} is it
+#           without a leading "v"
+# asset     URL of the release file; go:<package> for `go install
+#           <package>@{v}` (checked against sum.golang.org by go itself);
+#           rustup for the Rust toolchain {v} (checked by rustup against the
+#           channel manifest)
+# checksum  URL of the file holding upstream's sha256 for the asset, or a
+#           suffix to the asset URL (.sha256); sha256:<hex> where upstream
+#           publishes none (Renovate's github-release-attachments datasource
+#           rewrites it with the version); - where the asset is not a URL
+# members   comma list of src[:dst]: src is the path in the archive, or the
+#           file itself; dst defaults to the basename of src and lands in
+#           PREFIX/bin; a dst with a "/" is relative to PREFIX (a directory,
+#           merged into what is there, when both end in "/"). For rustup: the
+#           toolchain components.
+# A line may name Renovate's versioning after depName (versioning=...).
+
+# --- Kubernetes, Talos, containers, secrets ------------------------------------
+# renovate: datasource=github-releases depName=kubernetes/kubernetes
+kubectl v1.37.1 https://dl.k8s.io/release/{v}/bin/linux/amd64/kubectl .sha256 kubectl
+# renovate: datasource=github-releases depName=int128/kubelogin
+kubelogin v1.36.4 https://github.com/int128/kubelogin/releases/download/{v}/kubelogin_linux_amd64.zip .sha256 kubelogin:kubectl-oidc_login
+# renovate: datasource=github-releases depName=skyhook-io/radar
+kubectl-radar v1.14.1 https://github.com/skyhook-io/radar/releases/download/{v}/radar_{v}_linux_amd64.tar.gz https://github.com/skyhook-io/radar/releases/download/{v}/checksums.txt kubectl-radar
+# renovate: datasource=github-releases depName=helm/helm
+helm v4.3.0 https://get.helm.sh/helm-{v}-linux-amd64.tar.gz .sha256sum linux-amd64/helm
+# renovate: datasource=github-releases depName=helmfile/helmfile
+helmfile v1.8.0 https://github.com/helmfile/helmfile/releases/download/{v}/helmfile_{n}_linux_amd64.tar.gz https://github.com/helmfile/helmfile/releases/download/{v}/helmfile_{n}_checksums.txt helmfile
+# renovate: datasource=github-releases depName=fluxcd/flux2
+flux v2.9.5 https://github.com/fluxcd/flux2/releases/download/{v}/flux_{n}_linux_amd64.tar.gz https://github.com/fluxcd/flux2/releases/download/{v}/flux_{n}_checksums.txt flux
+# renovate: datasource=github-releases depName=siderolabs/talos
+talosctl v1.14.1 https://github.com/siderolabs/talos/releases/download/{v}/talosctl-linux-amd64 https://github.com/siderolabs/talos/releases/download/{v}/sha256sum.txt talosctl-linux-amd64:talosctl
+# renovate: datasource=github-releases depName=budimanjojo/talhelper
+talhelper v3.1.17 https://github.com/budimanjojo/talhelper/releases/download/{v}/talhelper_linux_amd64.tar.gz https://github.com/budimanjojo/talhelper/releases/download/{v}/checksums.txt talhelper
+# renovate: datasource=github-releases depName=google/go-containerregistry
+go-containerregistry v0.22.1 https://github.com/google/go-containerregistry/releases/download/{v}/go-containerregistry_Linux_x86_64.tar.gz https://github.com/google/go-containerregistry/releases/download/{v}/checksums.txt crane,gcrane,krane
+# renovate: datasource=github-releases depName=aquasecurity/trivy
+trivy v0.74.0 https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_Linux-64bit.tar.gz https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_checksums.txt trivy
+# renovate: datasource=github-releases depName=pete911/certinfo
+certinfo v1.0.40 https://github.com/pete911/certinfo/releases/download/{v}/certinfo_{n}_linux_amd64.tar.gz https://github.com/pete911/certinfo/releases/download/{v}/checksums.txt certinfo
+# renovate: datasource=github-releases depName=getsops/sops
+sops v3.13.3 https://github.com/getsops/sops/releases/download/{v}/sops-{v}.linux.amd64 https://github.com/getsops/sops/releases/download/{v}/sops-{v}.checksums.txt sops-{v}.linux.amd64:sops
+
+# --- Go ----------------------------------------------------------------------
+# Go first: the go: lines below build with it.
+# renovate: datasource=golang-version depName=golang
+go 1.27.1 https://dl.google.com/go/go{v}.linux-amd64.tar.gz .sha256 go/:go/
+# renovate: datasource=go depName=golang.org/x/tools/gopls
+gopls v0.23.0 go:golang.org/x/tools/gopls - gopls
+# renovate: datasource=go depName=github.com/go-delve/delve
+dlv v1.27.2 go:github.com/go-delve/delve/cmd/dlv - dlv
+# renovate: datasource=github-releases depName=dominikh/go-tools
+staticcheck 2026.2.1 go:honnef.co/go/tools/cmd/staticcheck - staticcheck
+# renovate: datasource=go depName=mvdan.cc/gofumpt
+gofumpt v0.12.0 go:mvdan.cc/gofumpt - gofumpt
+# renovate: datasource=github-releases depName=golangci/golangci-lint
+golangci-lint v2.14.0 https://github.com/golangci/golangci-lint/releases/download/{v}/golangci-lint-{n}-linux-amd64.tar.gz https://github.com/golangci/golangci-lint/releases/download/{v}/golangci-lint-{n}-checksums.txt golangci-lint-{n}-linux-amd64/golangci-lint
+# age publishes no sha256 (only Sigsum proofs), so it is built from its module.
+# renovate: datasource=go depName=filippo.io/age
+age v1.3.2 go:filippo.io/age/cmd/... - age,age-keygen,age-inspect,age-plugin-batchpass
+# --- Protocol Buffers ----------------------------------------------------------
+# protoc finds the well-known types (google/protobuf/*.proto) in ../include.
+# renovate: datasource=github-release-attachments depName=protocolbuffers/protobuf
+protoc v36.2 https://github.com/protocolbuffers/protobuf/releases/download/{v}/protoc-{n}-linux-x86_64.zip sha256:121f6c7afe1d4d0e3ea6aab9432038599250134cbf4474cb1167d2c7decd4278 bin/protoc,include/:include/
+# renovate: datasource=github-releases depName=bufbuild/buf
+buf v1.73.0 https://github.com/bufbuild/buf/releases/download/{v}/buf-Linux-x86_64 https://github.com/bufbuild/buf/releases/download/{v}/sha256.txt buf-Linux-x86_64:buf
+# renovate: datasource=go depName=google.golang.org/protobuf
+protoc-gen-go v1.36.12 go:google.golang.org/protobuf/cmd/protoc-gen-go - protoc-gen-go
+# renovate: datasource=go depName=google.golang.org/grpc/cmd/protoc-gen-go-grpc
+protoc-gen-go-grpc v1.6.2 go:google.golang.org/grpc/cmd/protoc-gen-go-grpc - protoc-gen-go-grpc
+
+# --- Deno, Rust ----------------------------------------------------------------
+# renovate: datasource=github-releases depName=denoland/deno
+deno v2.9.7 https://github.com/denoland/deno/releases/download/{v}/deno-x86_64-unknown-linux-gnu.zip .sha256sum deno
+# rustup-init, then the toolchain through it.
+# renovate: datasource=github-tags depName=rust-lang/rustup
+rustup 1.29.1 https://static.rust-lang.org/rustup/archive/{v}/x86_64-unknown-linux-gnu/rustup-init .sha256 rustup-init
+# renovate: datasource=github-releases depName=rust-lang/rust
+rust 1.98.1 rustup - clippy,rustfmt,rust-src,rust-analyzer
+
+# --- Shell and CLI tools -------------------------------------------------------
+# fish, as on the host (the Flatpak's terminal runs it with your dotfiles). One
+# static binary with its functions built in; upstream publishes no sha256.
+# renovate: datasource=github-release-attachments depName=fish-shell/fish-shell
+fish 4.9.3 https://github.com/fish-shell/fish-shell/releases/download/{v}/fish-{v}-linux-x86_64.tar.xz sha256:8f643d10ad1abb0ef7072764c01ceb5cf61b2d373fda400cf60f0bad69b7e095 fish
+# renovate: datasource=github-releases depName=BurntSushi/ripgrep
+ripgrep 15.2.0 https://github.com/BurntSushi/ripgrep/releases/download/{v}/ripgrep-{v}-x86_64-unknown-linux-musl.tar.gz .sha256 ripgrep-{v}-x86_64-unknown-linux-musl/rg
+# renovate: datasource=github-release-attachments depName=sharkdp/fd
+fd v10.5.0 https://github.com/sharkdp/fd/releases/download/{v}/fd-{v}-x86_64-unknown-linux-musl.tar.gz sha256:761c72dc8e120d85b22292063be8a796e2eeb20eb3e4f38b8fa2343ccf3514a7 fd-{v}-x86_64-unknown-linux-musl/fd
+# renovate: datasource=github-releases depName=casey/just
+just 1.58.0 https://github.com/casey/just/releases/download/{v}/just-{v}-x86_64-unknown-linux-musl.tar.gz https://github.com/casey/just/releases/download/{v}/SHA256SUMS just
+# renovate: datasource=github-releases depName=cli/cli
+gh v2.101.0 https://github.com/cli/cli/releases/download/{v}/gh_{n}_linux_amd64.tar.gz https://github.com/cli/cli/releases/download/{v}/gh_{n}_checksums.txt gh_{n}_linux_amd64/bin/gh
+# renovate: datasource=github-release-attachments depName=koalaman/shellcheck
+shellcheck v0.11.0 https://github.com/koalaman/shellcheck/releases/download/{v}/shellcheck-{v}.linux.x86_64.tar.xz sha256:8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198 shellcheck-{v}/shellcheck
+# Runs a command on the host from a Flatpak or toolbox (podman, below it).
+# renovate: datasource=github-release-attachments depName=1player/host-spawn
+host-spawn v1.6.2 https://github.com/1player/host-spawn/releases/download/{v}/host-spawn-x86_64 sha256:077bc09a087292447ba17cfe2156a93f71bf56c4c6be8e38d3abe65c1240f34c host-spawn-x86_64:host-spawn

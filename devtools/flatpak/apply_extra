@@ -1,0 +1,15 @@
+#!/bin/sh
+# Runs on every machine, at install and on each update, after flatpak
+# downloaded code.deb from Microsoft (the extra-data build.sh declares). The
+# sandbox has the runtime (the Sdk: ar, tar, xz) and /app/extra, its cwd, as
+# the only writable place.
+set -e
+ar x code.deb data.tar.xz
+tar -xJf data.tar.xz ./usr/share/code
+mv usr/share/code vscode
+rm -r code.deb data.tar.xz usr
+
+# The icon comes from the .deb as well, so the published image holds nothing
+# of Microsoft's. flatpak exports export/ as if it had been built in.
+install -Dm644 vscode/resources/app/resources/linux/code.png \
+    export/share/icons/hicolor/512x512/apps/io.github.lucarickli.Code.png

@@ -1,9 +1,10 @@
 # Everything installed into the image, one package per line; `#` comments and
-# blank lines are ignored (build_files/build.sh, which also excludes a few
+# blank lines are ignored (image/packages.sh, which also excludes a few
 # unwanted weak dependencies). Elsewhere: the comps groups (Containerfile),
-# noctalia-greeter (built from source, Containerfile `greeter` stage),
-# GitHub-release binaries (binary.yaml), the NVIDIA driver (nvidia/), and
-# desktop apps, which are Flatpaks (flatpaks.txt).
+# noctalia-greeter (built from source, Containerfile `greeter` stage), the
+# NVIDIA driver (nvidia/), and desktop apps, which are Flatpaks (flatpaks.txt).
+# Development tools (Kubernetes CLIs, toolchains) are not on the host: they
+# are in the VS Code Flatpak and the dev container (devtools/).
 
 # --- Base tooling ------------------------------------------------------------
 git
@@ -115,7 +116,7 @@ fail2ban-firewalld
 # --- Remote desktop (XRDP) ----------------------------------------------------
 # Enabled by default (preset), on 3389. PAM authenticates, then
 # overlay/etc/xrdp/startwm.sh starts the compositor directly; see there and the
-# XRDP block in build_files/finalize.sh. xorgxrdp is the X server the
+# XRDP block in image/finalize.sh. xorgxrdp is the X server the
 # compositors nest inside.
 xrdp
 xorgxrdp
@@ -158,6 +159,18 @@ moby-engine
 docker-cli
 docker-compose
 docker-buildx
+
+# --- Virtual machines --------------------------------------------------------
+# QEMU/KVM with libvirt and Virtual Machine Manager, Fedora's virtualization
+# group. Fedora's presets enable libvirt's daemons (socket-activated), and the
+# default NAT network starts with them. The accounts the installer creates are
+# in the libvirt group, which manages the system's VMs without a password.
+qemu-kvm
+libvirt-daemon-kvm
+libvirt-daemon-config-network
+virt-install
+virt-manager
+virt-viewer
 
 # --- Kernel/module build tools -----------------------------------------------
 # Delete this section to trim the image; a toolbox covers the same.

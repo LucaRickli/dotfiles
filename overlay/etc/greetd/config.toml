@@ -1,5 +1,5 @@
 # greetd runs noctalia-greeter as the display manager. The live ISO overwrites
-# this file to autologin into labwc instead (live/configure-installer.sh).
+# this file to autologin into labwc instead (installer/configure-installer.sh).
 #
 # The greeter lists every session under /usr/share/wayland-sessions/: niri
 # (preselected below), labwc, sway, river and wayfire. It brings its own

@@ -31,30 +31,30 @@ ARG SEAL=os-image
 # below. Only what each step needs, so that editing docs, CI files or home/
 # does not invalidate the cached package layer.
 FROM scratch AS ctx
-COPY build_files/build.sh /build_files/
-COPY packages/packages.txt packages/binary.yaml /packages/
+COPY image/packages.sh /image/
+COPY packages/packages.txt /packages/
 
 FROM scratch AS ctx-greeter
-COPY build_files/greeter.sh build_files/noctalia-greeter.spec /
+COPY image/greeter.sh image/noctalia-greeter.spec /
 
 FROM scratch AS ctx-boot
-COPY build_files/bootloader.sh build_files/initramfs.sh build_files/uki.sh /build_files/
+COPY image/bootloader.sh image/initramfs.sh image/uki.sh /image/
 
 FROM scratch AS ctx-finalize
-COPY build_files/finalize.sh /build_files/
+COPY image/finalize.sh /image/
 
 FROM scratch AS ctx-nvidia
 COPY nvidia/ /nvidia/
 
 FROM scratch AS ctx-live
-COPY live/ /
+COPY installer/ /
 
 # One base for both the OS image and the live ISO. It floats on the release
 # tag; moving to the next Fedora release is a deliberate edit here.
 FROM quay.io/fedora/fedora-bootc:44 AS base
 
 # noctalia-greeter, which Fedora does not package: built from this upstream
-# tag into an RPM (build_files/greeter.sh) that build.sh installs with the rest.
+# tag into an RPM (image/greeter.sh) that packages.sh installs with the rest.
 # From the same base as the image, so it links against the libraries the image
 # ships, and a base update rebuilds both together. The commit is what gets
 # built, the tag names its version; Renovate bumps both, and a tag moved
@@ -94,24 +94,21 @@ RUN dnf -y group install \
     && rm -f /var/log/dnf5.log*
 
 # The repo definitions for the third-party packages in packages.txt. The rest
-# of overlay/ is copied in further down; build.sh needs these first.
+# of overlay/ is copied in further down; packages.sh needs these first.
 COPY overlay/etc/yum.repos.d/ /etc/yum.repos.d/
 
-# Packages (packages.txt, plus the greeter RPM from the stage above) and the
-# binaries bm manages (binary.yaml). The expensive layer: nothing below
-# invalidates it. CI mounts the bm binaries pre-fetched and verified as
-# /run/bundle.tar (the `bm` job in build.yml); without one, build.sh syncs
-# them itself.
+# Packages (packages.txt, plus the greeter RPM from the stage above). The
+# expensive layer: nothing below invalidates it.
 RUN --mount=type=bind,from=ctx,source=/,target=/ctx \
     --mount=type=bind,from=greeter,source=/out,target=/run/greeter \
-    /ctx/build_files/build.sh
+    /ctx/image/packages.sh
 
 # GRUB/bootupd out, systemd-boot in, signed with the db key from keys/
 # (podman secrets, so the private key never enters a layer).
 RUN --mount=type=bind,from=ctx-boot,source=/,target=/ctx \
     --mount=type=secret,id=secureboot_key \
     --mount=type=secret,id=secureboot_cert \
-    /ctx/build_files/bootloader.sh
+    /ctx/image/bootloader.sh
 
 # overlay/ lands verbatim on the image. The dotfiles in home/ never do.
 COPY overlay/ /
@@ -122,7 +119,7 @@ COPY overlay/ /
 COPY keys/cosign.pub /etc/pki/containers/fedora-bootc.pub
 
 # Services, generated configs, and the build-time assertions.
-RUN --mount=type=bind,from=ctx-finalize,source=/,target=/ctx /ctx/build_files/finalize.sh
+RUN --mount=type=bind,from=ctx-finalize,source=/,target=/ctx /ctx/image/finalize.sh
 
 # --- everything below seals one of two things -------------------------------
 FROM ${OS_BASE} AS os-image
@@ -142,7 +139,7 @@ FROM ${SEAL} AS rootfs
 
 # Rebuild the initramfs (bootc/composefs dracut module; nvidia early KMS on the
 # NVIDIA variant). This is the last change to the rootfs, then validate it.
-RUN --mount=type=bind,from=ctx-boot,source=/,target=/ctx /ctx/build_files/initramfs.sh
+RUN --mount=type=bind,from=ctx-boot,source=/,target=/ctx /ctx/image/initramfs.sh
 RUN bootc container lint
 
 # Move kernel + initramfs out of the rootfs; they live in the UKI instead.
@@ -194,7 +191,7 @@ RUN --mount=type=bind,from=chunked,source=/,target=/target \
     --mount=type=bind,from=ctx-boot,source=/,target=/ctx \
     --mount=type=secret,id=secureboot_key \
     --mount=type=secret,id=secureboot_cert \
-    env KERNEL_DIR=/run/src/kernel /ctx/build_files/uki.sh
+    env KERNEL_DIR=/run/src/kernel /ctx/image/uki.sh
 
 # The final image: the rechunked rootfs plus the sealed UKI. Nothing under /
 # may change after the digest was computed; only /boot is outside the seal.
@@ -208,7 +205,7 @@ COPY --from=uki /out/ /boot/EFI/Linux/
 # installer and what the install itself uses. fisherman (the installer's
 # helper) runs `bootc install to-filesystem` inside a container of the TARGET
 # image, so podman and the disk tools are needed, bootc is not.
-# live/build-iso.sh assembles the ISO from this stage.
+# installer/build-iso.sh assembles the ISO from this stage.
 FROM base AS live
 RUN --mount=type=bind,from=ctx-live,source=/,target=/ctx /ctx/prepare-live.sh
 # The signature policy and the cosign public key, so the image the installer
@@ -218,5 +215,5 @@ COPY keys/cosign.pub /etc/pki/containers/fedora-bootc.pub
 
 # The graphical installer (bootc-installer Flatpak): started by labwc's
 # autostart, locked to this repo's image catalog and named after it
-# (live/images.json, live/recipe.json, live/branding.json).
+# (installer/images.json, installer/recipe.json, installer/branding.json).
 RUN --mount=type=bind,from=ctx-live,source=/,target=/ctx /ctx/configure-installer.sh

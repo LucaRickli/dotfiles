@@ -1,21 +1,20 @@
 # Scan a locally built image right before it is pushed, so that an image
 # carrying a secret or a critical vulnerability is never published (scan.sh
-# says what fails and why). Every job that pushes an image runs it just before
-# the push, and pull request builds run it too: they push nothing, but fail
-# the same way (a pending Fedora update only warns there), so the PR is
-# blocked instead of the push after merging.
+# says what fails and why). Every job that pushes a container image runs it
+# just before the push, and pull request builds run it too: they push
+# nothing, but fail the same way (a pending Fedora update only warns there),
+# so the PR is blocked instead of the push after merging. (The VS Code
+# Flatpak is no container: its build runs the secret part itself,
+# devtools/flatpak/build.sh.)
 #
 # What needs action also becomes code scanning alerts (Security tab), one
 # category per image, so an alert closes when a later build of that image no
 # longer has it. Not from pull requests: a fork's token cannot upload, and
 # the gate above already reports there.
 #
-# trivy is the release packages/binary.yaml pins for the image (Renovate bumps
-# it with the rest), verified by bm, so this action has no download or pin of
-# its own for it. It comes out of the bm bundle the `bm` job in build.yml
-# verified, from the workspace or the cache; when no bundle for this exact
-# binary.yaml is cached (devcontainer.yml, or a job that does not wait for a
-# bm job), bm fetches just trivy, so a scan never runs an older trivy.
+# trivy is the release devtools/tools.txt pins (Renovate bumps it with the
+# rest of the development tools), fetched and checked against upstream's
+# sha256 by devtools/install.sh, so this action has no pin of its own for it.
 name: Scan an image before pushing it
 description: Fail on secrets and critical vulnerabilities in a local image
 inputs:
@@ -35,68 +34,15 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Look for the bm bundle
-      id: bundle
-      shell: bash
-      run: |
-        if [ -f bundle.tar ]; then echo "present=true"; else echo "present=false"; fi >> "$GITHUB_OUTPUT"
-
-    # The base job and pull request builds have it already. Elsewhere, the
-    # bundle a bm job saved for this binary.yaml (exact key only: an older
-    # bundle would carry an older trivy).
-    - name: Restore the bm bundle
-      id: restore
-      if: steps.bundle.outputs.present != 'true'
-      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: bundle.tar
-        key: bm-bundle-${{ hashFiles('packages/binary.yaml') }}
-
     - name: Get trivy
       id: trivy
       shell: bash
-      env:
-        RESTORED: ${{ steps.restore.outputs.cache-matched-key != '' }}
       run: |
         set -euo pipefail
         bin="${RUNNER_TEMP}/scan-image"
-        mkdir -p "$bin"
-        if [ -f bundle.tar ]; then
-          tar -xf bundle.tar -C "$bin" --strip-components=2 usr/bin/trivy ||
-            { echo "::error::no usr/bin/trivy in the bm bundle; scanning needs trivy in packages/binary.yaml"; exit 1; }
-          # Restored only for this: leave the workspace as the job had it
-          # (build.yml mounts a bundle.tar it finds into the image build).
-          if [ "$RESTORED" = true ]; then rm -f bundle.tar; fi
-        else
-          # No bundle for this binary.yaml: bm fetches and verifies trivy
-          # alone, the way build.yml's bm job does everything (bm itself
-          # checksummed, both retried).
-          cfg=packages/binary.yaml
-          yq --version | grep -q mikefarah || { echo "needs mikefarah's Go yq, found: $(yq --version 2>&1)" >&2; exit 1; }
-          bm_url=$(yq '.releases[] | select(.id == "bm") | .src' "$cfg")
-          bm_sum=$(yq '.releases[] | select(.id == "bm") | .integrity.signature' "$cfg")
-          for attempt in 1 2 3; do
-            if curl -fsSL -o "$bin/bm" "$bm_url" &&
-               echo "$(curl -fsSL "$bm_sum" | awk '{print $1}')  $bin/bm" | sha256sum -c -; then
-              break
-            fi
-            [ "$attempt" = 3 ] && { echo "bm bootstrap failed after 3 attempts" >&2; exit 1; }
-            echo "bm bootstrap attempt $attempt failed, retrying in 10s" >&2
-            sleep 10
-          done
-          chmod +x "$bin/bm"
-          dst="$bin" yq '.releases |= map(select(.id == "trivy")) | .releases[].dst = strenv(dst)' "$cfg" > "$bin/trivy.yaml"
-          test "$(yq '.releases | length' "$bin/trivy.yaml")" = 1 ||
-            { echo "::error::scanning needs trivy in packages/binary.yaml"; exit 1; }
-          for attempt in 1 2 3; do
-            if "$bin/bm" sync -c "$bin/trivy.yaml"; then break; fi
-            [ "$attempt" = 3 ] && { echo "bm sync of trivy failed after 3 attempts" >&2; exit 1; }
-            echo "bm sync attempt $attempt failed, retrying in 10s" >&2
-            sleep 10
-          done
-        fi
-        "$bin/trivy" --version | head -1
-        echo "path=$bin/trivy" >> "$GITHUB_OUTPUT"
+        devtools/install.sh "$bin" trivy
+        "$bin/bin/trivy" --version | head -1
+        echo "path=$bin/bin/trivy" >> "$GITHUB_OUTPUT"
 
     # Fails only when the scan itself could not finish. A verdict of "fail"
     # is acted on at the end, after the upload, so the alerts show what

@@ -1,0 +1,10 @@
+#!/bin/sh
+# /app/bin/fish, the terminal's shell: fish (/app/libexec/fish) with your
+# dotfiles. flatpak points XDG_CONFIG_HOME at this app's own directory, so the
+# fish directory there is made a link to ~/.config/fish (once, if you have one).
+config=$XDG_CONFIG_HOME/fish
+if [ ! -e "$config" ] && [ ! -L "$config" ] && [ -d "$HOME/.config/fish" ]; then
+    mkdir -p "$XDG_CONFIG_HOME"
+    ln -s "$HOME/.config/fish" "$config"
+fi
+exec /app/libexec/fish "$@"
