@@ -28,15 +28,15 @@ kubectl v1.37.1 https://dl.k8s.io/release/{v}/bin/linux/amd64/kubectl .sha256 ku
 # renovate: datasource=github-releases depName=int128/kubelogin
 kubelogin v1.36.4 https://github.com/int128/kubelogin/releases/download/{v}/kubelogin_linux_amd64.zip .sha256 kubelogin:kubectl-oidc_login
 # renovate: datasource=github-releases depName=skyhook-io/radar
-kubectl-radar v1.14.1 https://github.com/skyhook-io/radar/releases/download/{v}/radar_{v}_linux_amd64.tar.gz https://github.com/skyhook-io/radar/releases/download/{v}/checksums.txt kubectl-radar
+kubectl-radar v1.15.0 https://github.com/skyhook-io/radar/releases/download/{v}/radar_{v}_linux_amd64.tar.gz https://github.com/skyhook-io/radar/releases/download/{v}/checksums.txt kubectl-radar
 # renovate: datasource=github-releases depName=helm/helm
 helm v4.3.0 https://get.helm.sh/helm-{v}-linux-amd64.tar.gz .sha256sum linux-amd64/helm
 # renovate: datasource=github-releases depName=helmfile/helmfile
-helmfile v1.8.0 https://github.com/helmfile/helmfile/releases/download/{v}/helmfile_{n}_linux_amd64.tar.gz https://github.com/helmfile/helmfile/releases/download/{v}/helmfile_{n}_checksums.txt helmfile
+helmfile v1.8.1 https://github.com/helmfile/helmfile/releases/download/{v}/helmfile_{n}_linux_amd64.tar.gz https://github.com/helmfile/helmfile/releases/download/{v}/helmfile_{n}_checksums.txt helmfile
 # renovate: datasource=github-releases depName=fluxcd/flux2
 flux v2.9.5 https://github.com/fluxcd/flux2/releases/download/{v}/flux_{n}_linux_amd64.tar.gz https://github.com/fluxcd/flux2/releases/download/{v}/flux_{n}_checksums.txt flux
 # renovate: datasource=github-releases depName=siderolabs/talos
-talosctl v1.14.1 https://github.com/siderolabs/talos/releases/download/{v}/talosctl-linux-amd64 https://github.com/siderolabs/talos/releases/download/{v}/sha256sum.txt talosctl-linux-amd64:talosctl
+talosctl v1.14.2 https://github.com/siderolabs/talos/releases/download/{v}/talosctl-linux-amd64 https://github.com/siderolabs/talos/releases/download/{v}/sha256sum.txt talosctl-linux-amd64:talosctl
 # renovate: datasource=github-releases depName=budimanjojo/talhelper
 talhelper v3.1.17 https://github.com/budimanjojo/talhelper/releases/download/{v}/talhelper_linux_amd64.tar.gz https://github.com/budimanjojo/talhelper/releases/download/{v}/checksums.txt talhelper
 # renovate: datasource=github-releases depName=google/go-containerregistry
@@ -97,7 +97,7 @@ fd v10.5.0 https://github.com/sharkdp/fd/releases/download/{v}/fd-{v}-x86_64-unk
 # renovate: datasource=github-releases depName=casey/just
 just 1.58.0 https://github.com/casey/just/releases/download/{v}/just-{v}-x86_64-unknown-linux-musl.tar.gz https://github.com/casey/just/releases/download/{v}/SHA256SUMS just
 # renovate: datasource=github-releases depName=cli/cli
-gh v2.101.0 https://github.com/cli/cli/releases/download/{v}/gh_{n}_linux_amd64.tar.gz https://github.com/cli/cli/releases/download/{v}/gh_{n}_checksums.txt gh_{n}_linux_amd64/bin/gh
+gh v2.102.0 https://github.com/cli/cli/releases/download/{v}/gh_{n}_linux_amd64.tar.gz https://github.com/cli/cli/releases/download/{v}/gh_{n}_checksums.txt gh_{n}_linux_amd64/bin/gh
 # renovate: datasource=github-release-attachments depName=koalaman/shellcheck
 shellcheck v0.11.0 https://github.com/koalaman/shellcheck/releases/download/{v}/shellcheck-{v}.linux.x86_64.tar.xz sha256:8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198 shellcheck-{v}/shellcheck
 # Runs a command on the host from a Flatpak or toolbox (podman, below it).
