@@ -24,7 +24,7 @@ APP_ID=io.github.lucarickli.Code
 # lags a new branch by some weeks, so this moves by hand once a year.
 RUNTIME=26.08
 # renovate: datasource=github-releases depName=microsoft/vscode
-VSCODE_VERSION=1.139.1
+VSCODE_VERSION=1.140.0
 
 src=${SRC:-/src}
 out=${OUT:-/out}
