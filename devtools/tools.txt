@@ -34,7 +34,7 @@ helm v4.3.0 https://get.helm.sh/helm-{v}-linux-amd64.tar.gz .sha256sum linux-amd
 # renovate: datasource=github-releases depName=helmfile/helmfile
 helmfile v1.8.1 https://github.com/helmfile/helmfile/releases/download/{v}/helmfile_{n}_linux_amd64.tar.gz https://github.com/helmfile/helmfile/releases/download/{v}/helmfile_{n}_checksums.txt helmfile
 # renovate: datasource=github-releases depName=fluxcd/flux2
-flux v2.9.5 https://github.com/fluxcd/flux2/releases/download/{v}/flux_{n}_linux_amd64.tar.gz https://github.com/fluxcd/flux2/releases/download/{v}/flux_{n}_checksums.txt flux
+flux v2.9.6 https://github.com/fluxcd/flux2/releases/download/{v}/flux_{n}_linux_amd64.tar.gz https://github.com/fluxcd/flux2/releases/download/{v}/flux_{n}_checksums.txt flux
 # renovate: datasource=github-releases depName=siderolabs/talos
 talosctl v1.14.2 https://github.com/siderolabs/talos/releases/download/{v}/talosctl-linux-amd64 https://github.com/siderolabs/talos/releases/download/{v}/sha256sum.txt talosctl-linux-amd64:talosctl
 # renovate: datasource=github-releases depName=budimanjojo/talhelper
