@@ -25,7 +25,7 @@ COPY tools.txt extensions.txt install.sh /
 # that satisfies the extensions' `engines` uses them.
 FROM registry.fedoraproject.org/fedora-toolbox:44 AS vscode-extensions
 # renovate: datasource=github-releases depName=microsoft/vscode
-ARG VSCODE_VERSION=1.139.1
+ARG VSCODE_VERSION=1.140.0
 ARG DEV_HOME=/var/home/dev
 RUN --mount=type=bind,from=devtools,source=/,target=/run/devtools \
     set -eux; dnf -y install jq unzip; cd /tmp; \
