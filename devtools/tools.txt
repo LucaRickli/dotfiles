@@ -42,7 +42,7 @@ talhelper v3.1.17 https://github.com/budimanjojo/talhelper/releases/download/{v}
 # renovate: datasource=github-releases depName=google/go-containerregistry
 go-containerregistry v0.22.1 https://github.com/google/go-containerregistry/releases/download/{v}/go-containerregistry_Linux_x86_64.tar.gz https://github.com/google/go-containerregistry/releases/download/{v}/checksums.txt crane,gcrane,krane
 # renovate: datasource=github-releases depName=aquasecurity/trivy
-trivy v0.74.0 https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_Linux-64bit.tar.gz https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_checksums.txt trivy
+trivy v0.75.0 https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_Linux-64bit.tar.gz https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_checksums.txt trivy
 # renovate: datasource=github-releases depName=pete911/certinfo
 certinfo v1.0.40 https://github.com/pete911/certinfo/releases/download/{v}/certinfo_{n}_linux_amd64.tar.gz https://github.com/pete911/certinfo/releases/download/{v}/checksums.txt certinfo
 # renovate: datasource=github-releases depName=getsops/sops
@@ -83,7 +83,7 @@ deno v2.9.7 https://github.com/denoland/deno/releases/download/{v}/deno-x86_64-u
 # renovate: datasource=github-tags depName=rust-lang/rustup
 rustup 1.29.1 https://static.rust-lang.org/rustup/archive/{v}/x86_64-unknown-linux-gnu/rustup-init .sha256 rustup-init
 # renovate: datasource=github-releases depName=rust-lang/rust
-rust 1.98.1 rustup - clippy,rustfmt,rust-src,rust-analyzer
+rust 1.99.0 rustup - clippy,rustfmt,rust-src,rust-analyzer
 
 # --- Shell and CLI tools -------------------------------------------------------
 # fish, as on the host (the Flatpak's terminal runs it with your dotfiles). One
