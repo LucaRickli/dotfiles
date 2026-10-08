@@ -13,11 +13,12 @@
 #
 # workflow_run fires in this repository's own context (default branch, write
 # token) no matter what triggered the watched run, so nothing from that run is
-# checked out or executed here: it only reads the run's metadata.
+# checked out or executed here: it only reads the run's metadata (which is
+# why zizmor's warning about the trigger is ignored below).
 name: notify
 
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers]
     # By `name:`. Only what runs unattended.
     workflows: [build, check, devcontainer, flatpak, release, ci]
     types: [completed]

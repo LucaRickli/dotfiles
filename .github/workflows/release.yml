@@ -113,20 +113,31 @@ jobs:
 
   # The OS images. Exactly the same workflow that runs on every push, and it
   # publishes the same build-<sha>* tags. Nothing machines follow moves here;
-  # that happens in "Promote this build" at the very end, once the ISO exists
-  # and the release is published.
-  # A failed NVIDIA build fails the release, on purpose: promoting one variant
-  # and not the other would leave the two out of step.
+  # that happens in `promote` at the very end, once the ISO exists and the
+  # release is published. Its outputs are the list of images it built (`just
+  # images`) and how many build images it keeps, which the release notes and
+  # the promotion work from.
+  # Any failed image fails the release, on purpose: promoting some images
+  # and not the others would leave them out of step.
+  #
+  # The two keys by name, nothing else: each resolves in the job of build.yml
+  # that declares the `release` environment, which is where an environment
+  # secret of that name is read (GitHub's reusable-workflow rule).
   images:
     needs: plan
     if: needs.plan.outputs.release == 'true'
     uses: ./.github/workflows/build.yml
-    secrets: inherit
+    secrets:
+      SECUREBOOT_PRIVATE_KEY: ${{ secrets.SECUREBOOT_PRIVATE_KEY }}
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
     permissions:
       contents: read
       packages: write
       security-events: write
 
+  # The live image and the ISO, the release with the ISO as its assets. No
+  # key of either kind here: the live image signs nothing, and its cosign
+  # signature is made by `sign` below.
   iso:
     needs: [plan, images]
     if: needs.plan.outputs.release == 'true'
@@ -134,7 +145,7 @@ jobs:
     timeout-minutes: 120
     permissions:
       contents: write   # the release and its tag
-      packages: write   # the live image, and moving the promoted tags
+      packages: write   # the live image
       security-events: write   # scan results to code scanning (scan-image)
     steps:
       - name: Checkout
@@ -148,24 +159,24 @@ jobs:
         uses: ./.github/actions/prepare-runner
         with:
           need: "35"
-          pull-from: Containerfile
+          pull-from: installer/live.Containerfile
           # what `just iso` assembles the ISO in
           pull: quay.io/fedora/fedora:latest
 
       # The ISO is assembled by installer/build-iso.sh inside a Fedora
       # container, so the runner needs nothing but podman and just (not
-      # preinstalled). just itself is pinned too (Renovate bumps it through
-      # the PR gate), instead of whatever release is newest when the release
-      # runs.
+      # preinstalled). just is the pinned, checked release of
+      # devtools/tools.txt (Renovate bumps it through the PR gate), instead
+      # of whatever release is newest when the release runs.
       - name: Install just
-        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        uses: ./.github/actions/install-tools
         with:
-          just-version: "1.58.0"
+          tools: just
 
-      # No Secure Boot key here on purpose. The live image signs nothing:
-      # `--target live` never builds the stages that would need one, and the
-      # ISO deliberately ships no shim, so it does not boot under Secure Boot
-      # at all (installer/prepare-live.sh has the why).
+      # No Secure Boot key here on purpose. The live image signs nothing
+      # (installer/live.Containerfile has no step that would need one), and
+      # the ISO deliberately ships no shim, so it does not boot under Secure
+      # Boot at all (installer/prepare-live.sh has the why).
       # `just iso` builds the live image (localhost/fedora-bootc:live) and
       # assembles the ISO from it. The steps below scan, push and sign that
       # same image: building it a second time could pick up a newer base and
@@ -181,10 +192,11 @@ jobs:
           echo "iso-dest=${GITHUB_WORKSPACE}/fedora-bootc-live.iso" >> "$GITHUB_OUTPUT"
           df -h /
 
-      # Before the push, like every image, and before the login, so trivy
-      # never runs next to the token (.github/actions/scan-image). The
-      # installer Flatpak (pinned in installer/) and its runtime (from Flathub
-      # at build time) are upstream builds.
+      # Before the push, like every image, and before the login, so no
+      # registry credential is on the runner while the scan runs
+      # (.github/actions/scan-image). The installer Flatpak (pinned in
+      # installer/) and its runtime (from Flathub at build time) are upstream
+      # builds.
       - name: Scan the live image
         uses: ./.github/actions/scan-image
         with:
@@ -199,44 +211,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push the live image
-        id: push
-        run: |
-          set -euo pipefail
-          # Same rule as every other image here: one immutable tag, nothing
-          # overwritten. `live` is a moving tag and is written by the promote
-          # step at the end, not by the thing that built it.
-          registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
-          ref="${registry}/${IMAGE_NAME}:build-${GITHUB_SHA:0:7}-live"
-          podman push --retry 5 --retry-delay 15s --digestfile="${RUNNER_TEMP}/digestfile" "${IMAGE_NAME}:live" "$ref"
-          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
-          echo "digest=$(cat "${RUNNER_TEMP}/digestfile")" >> "$GITHUB_OUTPUT"
-
-      # Everything this repo publishes is signed, the live image included, so a
-      # machine with our policy.json can pull it like any other tag. Signing
-      # the digest is also what makes promotion free: `live` ends up pointing
-      # at an already-signed digest.
-      - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      # Same rule as every other image here: one immutable tag,
+      # build-<sha>-live, nothing overwritten; `live` is a moving tag and is
+      # written by `promote` at the end, not by the thing that built it.
+      # Everything this repo publishes is signed (`sign` below), the live
+      # image included, so a machine with our policy.json can pull it like
+      # any other tag. Signing the digest is also what makes promotion free:
+      # `live` ends up pointing at an already-signed digest.
+      - name: Publish the live image
+        uses: ./.github/actions/publish
         with:
-          # Same pin as build.yml, where the reason is.
-          cosign-release: "v3.1.3"
-
-      - name: Sign the live image
-        env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
-          REF: ${{ steps.push.outputs.ref }}@${{ steps.push.outputs.digest }}
-        run: |
-          test -n "$COSIGN_PRIVATE_KEY" || {
-            echo "SIGNING_SECRET is not set; see keys/README.md"; exit 1; }
-          # Retried like build.yml's signing; signing twice is harmless.
-          for attempt in 1 2 3; do
-            cosign sign -y --new-bundle-format=false --use-signing-config=false \
-              --tlog-upload=false --key env://COSIGN_PRIVATE_KEY "$REF" && break
-            [ "$attempt" = 3 ] && exit 1
-            echo "cosign sign attempt $attempt failed, retrying in 15s" >&2; sleep 15
-          done
-          cosign verify --key keys/cosign.pub --insecure-ignore-tlog=true "$REF"
+          image: localhost/${{ env.IMAGE_NAME }}:live
+          suffix: -live
+          repository: ${{ env.IMAGE_NAME }}
 
       - name: Checksum and split if needed
         id: assets
@@ -271,14 +258,34 @@ jobs:
       # Created only now, with the assets in hand, so a release never exists in
       # a half-published state. `gh release create` makes the tag too, on the
       # commit this run was built from.
+      #
+      # The image list in the notes is the tags the promotion moves: from
+      # build.yml's list, each image and its -uki, then live.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.plan.outputs.version }}
           ASSETS: ${{ steps.assets.outputs.assets }}
+          IMAGES: ${{ needs.images.outputs.images }}
+          KEEP: ${{ needs.images.outputs.keep }}
         run: |
           set -euo pipefail
           registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          names=$(jq -er '.[]' <<<"$IMAGES")   # fails on a missing or empty list
+          tags=()
+          for name in $names; do tags+=("$name" "${name}-uki"); done
+          tags+=(live)
+          width=0
+          for t in "${tags[@]}"; do if [ "${#t}" -gt "$width" ]; then width=${#t}; fi; done
+          list=$(for t in "${tags[@]}"; do
+            case $t in
+              latest) what="the OS, unsealed" ;;
+              live) what="the install ISO's live system" ;;
+              *-uki) what="that one sealed into a signed UKI" ;;
+              *) what="the OS plus the ${t} add-on, unsealed" ;;
+            esac
+            printf '    %s/%s:%-*s    %s\n' "$registry" "$IMAGE_NAME" "$width" "$t" "$what"
+          done)
           cat > NOTES.md << EOF
           Weekly build of the Fedora bootc image.
 
@@ -287,14 +294,10 @@ jobs:
           Signed with cosign; the image verifies its own updates against the key
           it ships (\`/etc/pki/containers/fedora-bootc.pub\`).
 
-              ${registry}/${IMAGE_NAME}:latest        the OS, unsealed
-              ${registry}/${IMAGE_NAME}:latest-uki    sealed into a signed UKI
-              ${registry}/${IMAGE_NAME}:nvidia        unsealed, NVIDIA driver
-              ${registry}/${IMAGE_NAME}:nvidia-uki    that one sealed
-              ${registry}/${IMAGE_NAME}:live          the install ISO's live system
+          ${list}
 
-          Those five are the only tags that move, and this release is what
-          they now point at. The install ISO deploys \`latest-uki\`. Until ten
+          These are the only tags that move, and this release is what they
+          point at. The install ISO deploys \`latest-uki\`. Until ${KEEP:?}
           newer build images (about two builds) replace it, this build also has
           a tag of its own, for testing exactly this one:
 
@@ -317,24 +320,92 @@ jobs:
               $ASSETS
           fi
 
-      # LAST. Everything above has to have worked: both variants built, pushed
-      # and signed, the ISO assembled, the release published. Only then do the
-      # tags machines follow move, and moving them is just a new tag on a
-      # digest that already exists, so there is no rebuild and the signature
-      # made during the build still covers it.
-      #
-      # These five are the only tags in this repo that ever move, and they
-      # keep the same shape as the build tags they come from: the unsealed OS
-      # is `latest`, sealed is `-uki`. Everything else is build-<sha>, which
-      # never moves but is deleted once ten newer build-only images exist
-      # (build.yml).
+      - name: Disk usage on failure
+        if: failure()
+        run: |
+          df -h / || true
+          podman images --format '{{.Repository}}:{{.Tag}} {{.Size}}' || true
+
+  # The live image's cosign signature, in a job that holds the key and runs
+  # nothing else, like build.yml's `sign` (.github/actions/sign has the why).
+  sign:
+    needs: [plan, iso]
+    if: needs.plan.outputs.release == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    environment: release   # the cosign key
+    permissions:
+      contents: read    # keys/cosign.pub
+      packages: write   # the signature
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Only the live image's: build.yml's `sign` signed the OS images.
+      - name: The pushed digest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: pushed-live
+          path: ${{ runner.temp }}/pushed
+
+      - name: Sign and verify
+        uses: ./.github/actions/sign
+        with:
+          refs-dir: ${{ runner.temp }}/pushed
+          cosign-key: ${{ secrets.SIGNING_SECRET }}
+          registry-token: ${{ github.token }}
+
+  # LAST. Everything above has to have worked: every image built, pushed
+  # and signed, the ISO assembled, the release published. Only then do the
+  # tags machines follow move, and moving them is just a new tag on a
+  # digest that already exists, so there is no rebuild and the signature
+  # made during the build still covers it. No key here: the signatures are
+  # verified, with the public one, not made.
+  #
+  # These are the only tags in this repo that ever move, one pair per
+  # image in build.yml's list plus live, and they keep the same shape as
+  # the build tags they come from: the unsealed OS is `latest`, an
+  # add-on's is its name, sealed is `-uki`. Everything else is
+  # build-<sha>, which never moves but is deleted once enough newer
+  # build-only images exist (build.yml's collect, about two builds).
+  promote:
+    needs: [plan, images, iso, sign]
+    if: needs.plan.outputs.release == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read    # keys/cosign.pub
+      packages: write   # moving the promoted tags
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
+
       - name: Promote this build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGES: ${{ needs.images.outputs.images }}
         run: |
           set -euo pipefail
           registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
           sha="${GITHUB_SHA:0:7}"
+          # build-<sha>[-<add-on>] to <name> and build-<sha>[-<add-on>]-uki
+          # to <name>-uki, the same rule as build.yml's tags, then live.
+          names=$(jq -er '.[]' <<<"$IMAGES")   # fails on a missing or empty list
+          pairs=()
+          for name in $names; do
+            suffix=$([ "$name" = latest ] || echo "-${name}")
+            pairs+=("build-${sha}${suffix}=${name}" "build-${sha}${suffix}-uki=${name}-uki")
+          done
+          pairs+=("build-${sha}-live=live")
           # skopeo is the only registry-to-registry copy here (podman cannot
           # do it); the runner has it. A docker:// to docker:// copy needs no
           # user namespace, so Ubuntu's AppArmor rules do not get in the way.
@@ -346,11 +417,7 @@ jobs:
           printf '%s\n' "$GITHUB_TOKEN" \
             | podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin --authfile "$authfile"
           repo="${registry}/${IMAGE_NAME}"
-          for pair in "build-${sha}=latest" \
-                      "build-${sha}-uki=latest-uki" \
-                      "build-${sha}-nvidia=nvidia" \
-                      "build-${sha}-nvidia-uki=nvidia-uki" \
-                      "build-${sha}-live=live"; do
+          for pair in "${pairs[@]}"; do
             src="${pair%%=*}"; dst="${pair##*=}"
             # By digest, and only a verified one: a push build of the same
             # commit may be running alongside this release and pushing the
@@ -368,14 +435,8 @@ jobs:
           {
             echo "### Promoted"
             echo '```'
-            for t in latest latest-uki nvidia nvidia-uki live; do
-              echo "${registry}/${IMAGE_NAME}:${t}"
+            for pair in "${pairs[@]}"; do
+              echo "${registry}/${IMAGE_NAME}:${pair##*=}"
             done
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Disk usage on failure
-        if: failure()
-        run: |
-          df -h / || true
-          podman images --format '{{.Repository}}:{{.Tag}} {{.Size}}' || true

@@ -2,8 +2,8 @@
 #
 # Turn the plain Fedora bootc base into the live ISO rootfs: the graphical
 # session, the tools an install needs, and the ISO boot machinery. Runs from
-# the Containerfile's `live` stage; installer/configure-installer.sh then adds
-# the wizard on top.
+# installer/live.Containerfile; installer/configure-installer.sh then adds the
+# wizard on top.
 set -euxo pipefail
 # Session: labwc hosts the wizard, greetd autologs in, foot for the manual
 # install path, plus mesa, portals and fonts.

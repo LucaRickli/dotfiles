@@ -12,6 +12,10 @@
   "automerge": true,
   "automergeType": "pr",
   "platformAutomerge": true,
+  "ignoreDeps": [
+    "overridden",
+    "chunked"
+  ],
   "assignees": [
     "lucarickli"
   ],
@@ -140,6 +144,16 @@
       "minimumReleaseAge": "3 days"
     },
     {
+      "description": "Claude Code (devtools/flatpak/build.sh, devtools/Containerfile) follows Anthropic's stable channel, the npm dist-tag 'stable': a release about a week old, skipping those with major regressions, instead of every daily one",
+      "matchDatasources": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "@anthropic-ai/claude-code"
+      ],
+      "followTag": "stable"
+    },
+    {
       "description": "The noctalia-greeter pin is a tag plus the commit that gets built (features/login/build.sh). A new commit for the same tag means upstream moved the tag: never automerged, never in the weekly PR, and opened at once (so after the 3-day rule above, which it lifts: a re-created tag is 0 days old)",
       "matchPackageNames": [
         "noctalia-dev/noctalia-greeter"
@@ -201,12 +215,14 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Fedora release the images are built on: the base image tags (Containerfiles, Justfile) and the release named in the README",
+      "description": "Fedora release the images are built on: the base image tags (Containerfiles, Justfile, the scanner container in scan.sh) and the release named in the README",
       "managerFilePatterns": [
-        "/^Containerfile$/",
+        "/^image/[^/]+\\.Containerfile$/",
+        "/^installer/live\\.Containerfile$/",
         "/^devtools/Containerfile$/",
         "/^Justfile$/",
-        "/^README\\.md$/"
+        "/^README\\.md$/",
+        "/^\\.github/actions/scan-image/scan\\.sh$/"
       ],
       "matchStrings": [
         "(?:quay\\.io/fedora/fedora-bootc|registry\\.fedoraproject\\.org/fedora-minimal|registry\\.fedoraproject\\.org/fedora-toolbox):(?<currentValue>\\d+)\\b",
@@ -228,7 +244,7 @@
     },
     {
       "customType": "regex",
-      "description": "The development tools and VS Code extensions in devtools/tools.txt and extensions.txt: the line under each '# renovate:' comment is 'name version asset checksum members'. A checksum of sha256:<hex> (releases that publish none) is the digest the github-release-attachments datasource bumps with the version",
+      "description": "The development tools and VS Code extensions in devtools/tools.txt and extensions.txt: the line under each '# renovate:' comment is 'name version asset checksum members license [source]'. A checksum of sha256:<hex> (releases that publish none) is the digest the github-release-attachments datasource bumps with the version; the #sha256:<hex> of a license URL is not matched and stays as it is",
       "managerFilePatterns": [
         "/^devtools/tools\\.txt$/",
         "/^devtools/extensions\\.txt$/"

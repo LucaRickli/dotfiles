@@ -1,14 +1,14 @@
 # The NVIDIA driver from RPM Fusion nonfree (its repos from pre-install.sh).
 # An add-on: not part of the base image, built on top of it for the NVIDIA
-# images (the Containerfile's os-nvidia stage, `just build-nvidia`; tags
-# nvidia and nvidia-uki).
+# images (image/addon.Containerfile, `just build nvidia` or `just
+# build-nvidia`; tags nvidia and nvidia-uki).
 addon: true
 packages:
   # Kernel module, built at image build time against the image's kernel
   # (akmods, post-install.sh). Open kernel modules by default (Turing/RTX 2000
-  # and newer); `just build-nvidia closed` (NVIDIA_KMOD=closed) for older
-  # GPUs. Signed for Secure Boot with the db key from keys/ (podman secrets;
-  # see keys/README.md).
+  # and newer); `just build nvidia closed` (ADDON_FLAVOR=closed) for older
+  # GPUs. Signed for Secure Boot with the db key (podman secrets; see
+  # keys/README.md).
   - akmod-nvidia
 
   # Userspace driver + libraries (xorg-x11-drv-nvidia-libs pulls in

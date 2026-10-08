@@ -6,7 +6,9 @@
 #
 # Works without internet once the image is local: the language servers and
 # linters are in the image, and so are the VS Code extensions for them.
-# (The VS Code Server itself comes from the client; see the README.)
+# (The VS Code Server itself comes from the client; see the README.) Claude
+# Code is the exception: it is not open source, so `claude` downloads it
+# from Anthropic on first use (devtools/claude).
 #
 # install.sh checks every tool and extension (upstream's sha256, or a pinned
 # one where upstream publishes none), the throwaway VS Code Server below is
@@ -18,6 +20,16 @@
 # its home label and cannot be read.
 FROM scratch AS devtools
 COPY tools.txt extensions.txt install.sh /
+
+# The same for Claude Code's pin, in a stage of its own: a change to it does
+# not reinstall the tools.
+FROM scratch AS claude-code
+COPY claude-code.sh claude-code.asc /
+
+# And for mise's system part (mise-system.sh reads the Go and Deno versions
+# from tools.txt next to it).
+FROM scratch AS mise
+COPY mise-system.sh mise-config.toml tools.txt /
 
 # --- VS Code extensions, installed with a throwaway VS Code Server ------------
 # Those in extensions.txt. Only the resulting extensions directory is copied
@@ -65,24 +77,87 @@ ENV LANG=C.UTF-8 \
     DENO_NO_UPDATE_CHECK=1
 
 # The tools, into /usr/local (install.sh; Go in go/, Rust in rustup/ and
-# cargo/). fish also at /usr/bin/fish: toolbox starts the host user's login
-# shell by its host path. Go from upstream rather than Fedora's golang, which
-# lags a release and defaults to GOTOOLCHAIN=local. The Rust homes are
-# world-writable, like the official rust image's, so that `rustup target add`
-# and `cargo install` work for whoever runs the container (a remapped dev
-# user, or the toolbox user), which owns neither.
+# cargo/, the license texts in share/licenses/). fish also at /usr/bin/fish:
+# toolbox starts the host user's login shell by its host path. Go from
+# upstream rather than Fedora's golang, which lags a release and defaults to
+# GOTOOLCHAIN=local. The Rust homes are world-writable, like the official
+# rust image's, so that `rustup target add` and `cargo install` work for
+# whoever runs the container (a remapped dev user, or the toolbox user),
+# which owns neither. bcvk goes out of PATH, behind host-command (below).
 RUN --mount=type=bind,from=devtools,source=/,target=/run/devtools \
     /run/devtools/install.sh /usr/local \
     && chmod -R a+w "${RUSTUP_HOME}" "${CARGO_HOME}" \
-    && ln -s /usr/local/bin/fish /usr/bin/fish
+    && ln -s /usr/local/bin/fish /usr/bin/fish \
+    && mkdir -p /usr/local/libexec && mv /usr/local/bin/bcvk /usr/local/libexec/bcvk
 
-# Per-user bin dirs of `go install` and `deno install -g`, for login shells
-# (Dev Containers probes the environment through one).
+# mise: its settings in /etc/mise and the Go and Deno above as its installs
+# (mise-system.sh). Its fish activation also in /etc/fish/conf.d: a
+# toolbox's fish takes its vendor_conf.d dirs from the host's XDG_DATA_DIRS,
+# which need not list /usr/local/share. fish runs only the first file of a
+# name, so where both are read it runs once.
+RUN --mount=type=bind,from=mise,source=/,target=/run/mise \
+    /run/mise/mise-system.sh /usr/local /etc/mise \
+    && mkdir -p /etc/fish/conf.d \
+    && ln -s /usr/local/share/fish/vendor_conf.d/mise-activate.fish /etc/fish/conf.d/mise-activate.fish
+# mise-config.toml's downloads, versions host and paranoid mode, also here:
+# mise ranks the environment above every config file, so a project's
+# mise.toml, once trusted, cannot change them.
+ENV MISE_AUTO_INSTALL=0 \
+    MISE_USE_VERSIONS_HOST=0 \
+    MISE_USE_VERSIONS_HOST_TRACK=0 \
+    MISE_PARANOID=1
+
+# podman, docker, qemu-img and qemu-system-x86_64: the host's, in a toolbox,
+# and bcvk run there (devtools/host-command). Its own layer, so a change to
+# it does not reinstall the tools.
+COPY host-command /usr/local/libexec/host-command
+RUN for c in podman docker qemu-img qemu-system-x86_64 bcvk; do \
+        ln -s ../libexec/host-command "/usr/local/bin/$c"; \
+    done
+
+# Claude Code: `claude` (devtools/claude) downloads it on first use and
+# checks it against this pin, the version (the Flatpak's, in
+# devtools/flatpak/build.sh) with its URL, sha256 and size from Anthropic's
+# signed manifest (devtools/claude-code.sh). Its updates are off for every
+# copy, also the one the VS Code extension brings.
+# renovate: datasource=npm depName=@anthropic-ai/claude-code
+ARG CLAUDE_VERSION=2.1.285
+RUN --mount=type=bind,from=claude-code,source=/,target=/run/claude-code \
+    pin=$(/run/claude-code/claude-code.sh "$CLAUDE_VERSION") \
+    && mkdir -p /usr/local/share/claude-code \
+    && echo "$CLAUDE_VERSION $pin" > /usr/local/share/claude-code/pin
+COPY claude /usr/local/bin/claude
+ENV DISABLE_UPDATES=1 \
+    DISABLE_INSTALLATION_CHECKS=1
+
+# Per-user bin dirs of `go install` and `deno install -g`, and mise's shims
+# for what only mise installed (node, say), for login shells (Dev Containers
+# probes the environment through one). After the image's tools, not before:
+# a shim stops with "not trusted" in a checkout until `mise trust`
+# (mise-config.toml), and the Go extension would lose Go there. fish
+# switches versions per project itself (mise activate).
 RUN printf '%s\n' \
-    'for d in "$HOME/go/bin" "$HOME/.deno/bin"; do' \
+    'for d in "$HOME/go/bin" "$HOME/.deno/bin" "${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims"; do' \
     '    case ":$PATH:" in *":$d:"*) ;; *) PATH="$PATH:$d" ;; esac' \
     'done' \
     'export PATH' > /etc/profile.d/devcontainer-path.sh
+
+# EDITOR in VS Code's terminals: Dev Containers puts its remote `code` on
+# PATH there, with VSCODE_IPC_HOOK_CLI naming the socket to the window that
+# opened the container, so git, sops and kubectl edit in that window and
+# wait for the tab to close. Set over anything inherited and, in fish, after
+# your conf.d; a toolbox (no such socket) keeps the default (nano).
+RUN printf '%s\n' \
+        'if [ -S "${VSCODE_IPC_HOOK_CLI:-}" ] && command -v code >/dev/null 2>&1; then' \
+        '    export EDITOR="code --wait" VISUAL="code --wait"' \
+        'fi' > /etc/profile.d/vscode-editor.sh \
+    && mkdir -p /etc/fish/conf.d \
+    && printf '%s\n' \
+        '# See /etc/profile.d/vscode-editor.sh.' \
+        'if test -S "$VSCODE_IPC_HOOK_CLI"; and command -q code' \
+        '    set -gx EDITOR "code --wait"' \
+        '    set -gx VISUAL "code --wait"' \
+        'end' > /etc/fish/conf.d/vscode-editor.fish
 
 # The Dev Containers user. updateRemoteUserUID rewrites its UID to the host
 # user's when a dev container is created (with podman the CLI also adds
@@ -91,11 +166,15 @@ RUN printf '%s\n' \
 # - the home is not under /home: on hosts where /home is a symlink (bootc,
 #   ostree) toolbox replaces /home and fails if it is not empty;
 # - the UID is not 1000: toolbox runs `useradd --uid <host uid>` without -o.
+# ~/.claude exists, empty, so that a new volume mounted there
+# (docs/devtools.md, Claude Code) starts out the user's, mode 700, under
+# docker too, which makes a missing mount point root's.
 RUN set -eux; \
     mkdir -p /var/home; \
     groupadd --gid "${DEV_UID}" "${DEV_USER}"; \
     useradd --uid "${DEV_UID}" --gid "${DEV_UID}" --groups wheel \
         --home-dir "/var/home/${DEV_USER}" --create-home --shell /bin/bash "${DEV_USER}"; \
+    install -d -m 700 -o "${DEV_USER}" -g "${DEV_USER}" "/var/home/${DEV_USER}/.claude"; \
     echo "${DEV_USER} ALL=(ALL) NOPASSWD: ALL" > "/etc/sudoers.d/${DEV_USER}"; \
     chmod 0440 "/etc/sudoers.d/${DEV_USER}"
 
@@ -106,9 +185,12 @@ COPY --from=vscode-extensions --chown=59999:59999 \
 # init command as CMD.
 #
 # devcontainer.metadata makes `"image": "ghcr.io/lucarickli/devcontainer"`
-# enough in a project's devcontainer.json. The extensions listed are already
-# installed, so offline they are a no-op. checkForUpdates=local keeps the Go
-# extension from asking the module proxy about tool versions.
+# enough in a project's devcontainer.json. The language extensions listed
+# are already installed, so offline they are a no-op. Claude Code's
+# (anthropic.claude-code) is not: it carries Anthropic's binary, so Dev
+# Containers installs it from the Marketplace when it opens the container.
+# checkForUpdates=local keeps the Go extension from asking the module proxy
+# about tool versions.
 # The org.opencontainers labels replace the ones inherited from fedora-toolbox
 # (a derived image cannot unset a label, only override it).
 # com.github.containers.toolbox=true is inherited and must stay.
@@ -119,4 +201,4 @@ LABEL org.opencontainers.image.title="devcontainer" \
       org.opencontainers.image.vendor="" \
       org.opencontainers.image.version="" \
       org.opencontainers.image.licenses="" \
-      devcontainer.metadata='[{"remoteUser":"dev","customizations":{"vscode":{"extensions":["golang.go","denoland.vscode-deno","rust-lang.rust-analyzer","bufbuild.vscode-buf"],"settings":{"go.toolsManagement.checkForUpdates":"local","go.toolsManagement.autoUpdate":false,"go.survey.prompt":false,"files.watcherExclude":{"**/target/**":true}}}}}]'
+      devcontainer.metadata='[{"remoteUser":"dev","customizations":{"vscode":{"extensions":["golang.go","denoland.vscode-deno","rust-lang.rust-analyzer","bufbuild.vscode-buf","anthropic.claude-code"],"settings":{"go.toolsManagement.checkForUpdates":"local","go.toolsManagement.autoUpdate":false,"go.survey.prompt":false,"files.watcherExclude":{"**/target/**":true}}}}}]'

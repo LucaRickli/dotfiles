@@ -6,7 +6,7 @@ The OS, one folder per feature. Each has a `pkg.yml`:
 packages: [greetd, greetd-selinux]  # RPMs it installs (required; [] for none)
 exclude: [waybar]                   # RPMs kept out (weak dependencies that would only duplicate another)
 requires: [sessions]                # features it needs in the same image
-addon: true                         # not in the base image: built on top of it, for an image of its own
+addon: true                         # not in the base image: an image of its own on top of it, named after the feature
 ```
 
 and may have:
@@ -22,13 +22,21 @@ and may have:
 [`image/features.sh`](../image/features.sh) checks all of this first, in
 every build, `just check` and CI. A feature that enables services ships
 `overlay/usr/lib/systemd/{system,user}-preset/80-fedora-bootc-<feature>.preset`.
-Adding a base feature, a package or a build needs no change outside its
-folder. To remove a feature, delete its folder; the build names any feature
-that still requires it. Some are wired in elsewhere as well: the
-Containerfile names updates (the live ISO's signature policy) and nvidia
-(the NVIDIA images), `image/bootloader.sh` relies on boot's install config
-and kernel arguments, and the installer on locale's keyboard layout (the
-LUKS passphrase).
+Adding a feature (base or add-on), a package or a build needs no change
+outside its folder. An add-on gets images of its own (`<name>` and
+`<name>-uki`, from [`image/addon.Containerfile`](../image/addon.Containerfile)),
+a CI job and scan categories, so its name may not be a tag that is taken:
+`latest`, `live`, `base`, `*-uki`, `*-split` or `build-*`. Its package
+step runs with the Secure Boot db key mounted (nvidia signs its kernel
+modules with it), so its `pre-install.sh`, `post-install.sh` and whatever
+it installs can read that key. To remove a feature, delete its folder; the
+build names any feature that still requires it. Some are wired in
+elsewhere as well:
+[`installer/live.Containerfile`](../installer/live.Containerfile) takes
+updates' signature policy, `image/bootloader.sh` relies on boot's install
+config and kernel arguments, and the installer relies on locale's keyboard
+layout (the LUKS passphrase) and installs nvidia's image on the NVIDIA GPUs
+its open modules support.
 
 | Feature | |
 |---|---|
@@ -36,7 +44,7 @@ LUKS passphrase).
 | `boot` | bootc install and kernel arguments, LUKS, quiet boot, hidden boot menu |
 | `cockpit` | web admin, off by default, loopback only |
 | `containers` | docker next to podman, the podman API socket |
-| `desktop` | the Noctalia shell, portals, keyring, file manager, audio, dark mode |
+| `desktop` | the Noctalia shell, portals, keyring, SSH agent, file manager, audio, dark mode |
 | `fail2ban` | bans repeated login failures on SSH and XRDP |
 | `flatpak` | Flatpak with the Flathub and Devolutions remotes |
 | `kernel-build` | kernel and module build tools |
@@ -48,6 +56,6 @@ LUKS passphrase).
 | `ssh` | sshd policy and its banner |
 | `tailscale` | installed, not enabled |
 | `terminal` | fish, ghostty, fastfetch |
-| `updates` | the signature policy every update is checked against |
+| `updates` | the signature policy updates and the dev container are checked against |
 | `virtualization` | QEMU/KVM, libvirt, Virtual Machine Manager |
 | `xrdp` | remote desktop on 3389 |

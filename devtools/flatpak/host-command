@@ -1,5 +1,35 @@
 #!/bin/sh
-# /app/bin/podman and /app/bin/docker: the host's podman and docker, for Dev
-# Containers and the terminal. host-spawn talks to flatpak's session helper
-# (--talk-name=org.freedesktop.Flatpak).
-exec /app/bin/host-spawn "${0##*/}" "$@"
+# /app/libexec/host-command: everything the app runs on the host goes through
+# here, by host-spawn and flatpak's session helper
+# (--talk-name=org.freedesktop.Flatpak). The links to it in /app/bin run the
+# host's command of their name: podman and docker for Dev Containers and the
+# terminal, qemu-img and qemu-system-x86_64 for the VM recipes. Under its own
+# name it runs the command it is given (/app/bin/bcvk does).
+cmd=${0##*/}
+
+# The app has no host access unless an override grants it
+# (devtools/flatpak/build.sh). host-spawn would then fail with a bare D-Bus
+# error and 127, the code of a missing command, so say what is missing.
+# /.flatpak-info holds the policy the app runs with, overrides included: the
+# name, or the whole session bus (--socket=session-bus, Flatseal's "D-Bus
+# session bus"), which reaches it too. 125 is podman's own code for "podman
+# failed".
+if ! grep -qxE 'org\.freedesktop\.Flatpak=(talk|own)' /.flatpak-info &&
+    ! grep -qE '^sockets=(.*;)?session-bus(;|$)' /.flatpak-info; then
+    cat >&2 <<EOF
+$cmd: this VS Code cannot run commands on the host (podman and docker for
+Dev Containers, the just recipes that use them or run VMs, bcvk). To allow
+it, run this on the host, then restart VS Code:
+
+  flatpak override --user --talk-name=org.freedesktop.Flatpak io.github.lucarickli.Code
+
+Every extension, task and terminal in VS Code can then run any command as
+you, and as root through docker. Undo: --no-talk-name in place of --talk-name.
+EOF
+    exit 125
+fi
+
+case $cmd in
+host-command) exec /app/bin/host-spawn "$@" ;;
+*) exec /app/bin/host-spawn "$cmd" "$@" ;;
+esac

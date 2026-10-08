@@ -1,0 +1,52 @@
+# mise's system config in both dev images: /etc/mise/config.toml in the dev
+# container, /app/etc/mise/config.toml in the VS Code Flatpak
+# (mise-system.sh). Your ~/.config/mise and a project's mise.toml come on
+# top of it.
+
+[settings]
+# Version lists and release data from GitHub and the toolchains' own sites,
+# not through mise-versions.jdx.dev, a cache run by mise's author, which by
+# default also hands mise the checksums of GitHub downloads and gets a count
+# of every install. GitHub allows 60 API calls an hour without a token
+# (GITHUB_TOKEN raises that).
+use_versions_host = false
+use_versions_host_track = false
+# mise comes with the image (tools.txt), so no daily check for a newer one.
+disable_update_warning = true
+# Nothing is downloaded until you run `mise install` or `mise use`: a cloned
+# project's mise.toml does not fetch a toolchain on the first `go`, in a
+# terminal or in VS Code. Until then the pinned version runs, and the shell
+# warns which version is missing.
+auto_install = false
+status.missing_tools = "always"
+# Paranoid: a project's mise config (mise.toml, mise.local.toml,
+# .tool-versions and the rest) applies only once `mise trust` has trusted
+# that file as it is, and again after each change to it; `mise use` trusts
+# what it writes, `mise install`, `mise exec` and `mise run` trust nothing,
+# and a linked worktree has trust of its own. Until then the shell warns and
+# the pinned versions run. mise's default trusts a directory, whatever its
+# files say later, and a file that only names versions without asking: what
+# claude-sandboxed writes into a project (devtools/flatpak/claude-sandboxed),
+# an exec() template or a hook in a new mise.local.toml, would run in the
+# terminal outside its box at the next cd. Paranoid also refuses asdf
+# plugins from the community and a remote include not pinned to a commit or
+# digest.
+paranoid = true
+# auto_install, the two use_versions_host settings and paranoid are also in
+# the environment (MISE_AUTO_INSTALL=0, MISE_PARANOID=1 and so on: the
+# Containerfile's ENV, the Flatpak's build-finish), which mise ranks above
+# every config file, so a trusted project cannot change them. For
+# auto-install, set MISE_AUTO_INSTALL=1 yourself.
+#
+# `go install` keeps going to ~/go/bin, not into the selected Go, which for
+# the pinned one is read-only.
+go.set_gobin = false
+# Rust stays with rustup and rust-toolchain.toml: mise's RUSTUP_TOOLCHAIN
+# would override that file, and where rustup is read-only (the Flatpak) mise
+# would fetch a new one from sh.rustup.rs, unverified, into ~/.cargo.
+disable_tools = ["rust"]
+
+[env]
+# `deno install -g` keeps going to ~/.deno, which mise would point into the
+# selected Deno, for the pinned one read-only.
+DENO_INSTALL_ROOT = "{{env.HOME}}/.deno"

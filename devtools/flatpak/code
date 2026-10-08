@@ -3,51 +3,99 @@
 set -e
 
 # Where `go install`, `cargo install` and `deno install -g` put what they
-# build; the toolchains themselves are read-only in /app.
-export PATH=$PATH:$HOME/go/bin:${CARGO_HOME:-$HOME/.cargo}/bin:$HOME/.deno/bin
+# build (the toolchains themselves are read-only in /app), and mise's shims
+# for what only mise installed (node, say), for the extensions and tasks.
+# ~/go, ~/.cargo and ~/.deno are the app's own, kept in its directory
+# (--persist in devtools/flatpak/build.sh), with the module and crate caches.
+# After /app's tools, not before: a shim stops with "not trusted" in a
+# checkout until `mise trust` (devtools/mise-config.toml), and the Go
+# extension would lose Go there. The terminal's fish switches versions per
+# project itself (mise activate).
+export PATH=$PATH:$HOME/go/bin:${CARGO_HOME:-$HOME/.cargo}/bin:$HOME/.deno/bin:${MISE_DATA_DIR:-$XDG_DATA_HOME/mise}/shims
 # sops would look in $XDG_CONFIG_HOME, which flatpak points at this app's own
-# directory, not at ~/.config where the key is.
+# directory, not at ~/.config where the key is (in here once an override
+# grants ~/.config/sops/age, docs/devtools.md).
 export SOPS_AGE_KEY_FILE=${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}
+# Temporary files at a path the host sees as well: the app's directory in
+# XDG_RUNTIME_DIR, the same inside and out, while /tmp in here is the app's
+# own. Dev Containers writes a Dockerfile there for the host's podman to
+# build; `code --wait` its marker, which every instance of the app then sees.
+# A tmpfs, emptied at logout.
+if [ -d "$XDG_RUNTIME_DIR/app/$FLATPAK_ID" ]; then
+    export TMPDIR="$XDG_RUNTIME_DIR/app/$FLATPAK_ID"
+fi
+# Claude Code's login, settings and history: the app's own, as ~/.claude is
+# not in here. One login for the terminal's claude and the VS Code
+# extension's; claude-sandboxed keeps another.
+export CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR:-$XDG_CONFIG_HOME/claude}
 
 # A new profile starts with Dev Containers on the host's podman (/app/bin/podman
-# runs it through host-spawn) and the Go extension using the gopls and tools
-# in /app instead of fetching its own (the dev container's settings too). An
-# existing settings.json is left alone.
+# runs it through host-spawn, once host access is granted) and the Go
+# extension using the gopls and tools in /app instead of fetching its own
+# (the dev container's settings too). Dev Containers would hand each
+# container the compositor's own Wayland socket, around the restricted one
+# flatpak gives the app: off. Local History skips /tmp and /run/user, where
+# sops and kubectl hand $EDITOR the decrypted or live text (TMPDIR above, and
+# the document portal's files from the host). A terminal profile runs
+# claude-sandboxed. An existing settings.json is left alone.
 settings=$XDG_CONFIG_HOME/Code/User/settings.json
 if [ ! -e "$settings" ]; then
     mkdir -p "${settings%/*}"
     cat >"$settings" <<'JSON'
 {
     "dev.containers.dockerPath": "podman",
+    "dev.containers.mountWaylandSocket": false,
     "go.toolsManagement.checkForUpdates": "local",
     "go.toolsManagement.autoUpdate": false,
     "go.survey.prompt": false,
-    "files.watcherExclude": { "**/target/**": true }
+    "files.watcherExclude": { "**/target/**": true },
+    "workbench.localHistory.exclude": { "/tmp/**": true, "/run/user/**": true },
+    "terminal.integrated.profiles.linux": {
+        "claude-sandboxed": { "path": "/app/bin/claude-sandboxed", "icon": "shield" }
+    }
 }
 JSON
+fi
+
+# Where VS Code keeps sign-ins (GitHub, Settings Sync) and extensions'
+# secrets. Electron picks by desktop and knows none of this image's, so it
+# is named here: the login keyring once an override grants the Secret
+# Service (org.freedesktop.secrets, which hands over every item in it, not
+# only VS Code's; or the whole session bus, --socket=session-bus, which
+# reaches it too), else the app's profile, under a key built into Chromium,
+# so as safe as the profile itself. Switching between the two loses the
+# stored sign-ins once.
+store=basic
+if grep -qxE 'org\.freedesktop\.secrets=(talk|own)' /.flatpak-info ||
+    grep -qE '^sockets=(.*;)?session-bus(;|$)' /.flatpak-info; then
+    store=gnome-libsecret
 fi
 
 # What VS Code's own bin/code does, through zypak (from the Electron BaseApp),
 # which gives Chromium its sandbox inside flatpak's.
 code=(env ELECTRON_RUN_AS_NODE=1 /app/bin/zypak-wrapper.sh /app/extra/vscode/code
     /app/extra/vscode/resources/app/out/cli.js
-    --extensions-dir="$XDG_DATA_HOME/vscode/extensions")
+    --extensions-dir="$XDG_DATA_HOME/vscode/extensions" --password-store="$store")
 
 # Extensions, installed into the profile once each and yours from then on:
 # the Marketplace updates them, and one you remove stays removed. The
-# language ones (devtools/extensions.txt) and Dev Containers come from the
-# Marketplace by id; only when that fails (offline) do the language ones come
-# from the copies in /app/share/vscode/vsix, which VS Code keeps at their
-# version until you update them. Dev Containers is never bundled, as
-# Microsoft's license keeps it out of anything but VS Code's own download;
-# offline it is tried again on the next start. The first start takes a few
-# seconds longer.
+# language ones (devtools/extensions.txt), Dev Containers and Claude Code
+# come from the Marketplace by id; only when that fails (offline) do the
+# language ones come from the copies in /app/share/vscode/vsix, which VS Code
+# keeps at their version until you update them. Dev Containers and Claude
+# Code are never bundled: Microsoft's license keeps the one out of anything
+# but VS Code's own download, the other carries Anthropic's Claude Code
+# binary. Offline they are tried again on the next start. The first start
+# takes a few seconds longer.
 offered=$XDG_DATA_HOME/vscode/extensions-offered
-ids=(ms-vscode-remote.remote-containers) todo=()
+ids=(ms-vscode-remote.remote-containers anthropic.claude-code) todo=()
 for vsix in /app/share/vscode/vsix/*.vsix; do ids+=("$(basename "$vsix" .vsix)"); done
 for id in "${ids[@]}"; do
     grep -qxF "$id" "$offered" 2>/dev/null || todo+=("$id")
 done
+# Not as an editor ($EDITOR is "code --wait"): that only opens a file in the
+# running VS Code, and must not wait on the Marketplace each time.
+for arg; do case $arg in --wait | -w) todo=() ;; esac; done
 if [ ${#todo[@]} -gt 0 ]; then
     args=()
     for id in "${todo[@]}"; do args+=(--install-extension "$id"); done

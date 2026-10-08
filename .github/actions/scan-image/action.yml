@@ -1,11 +1,11 @@
 # Scan a locally built image right before it is pushed, so that an image
-# carrying a secret or a critical vulnerability is never published (scan.sh
-# says what fails and why). Every job that pushes a container image runs it
-# just before the push, and pull request builds run it too: they push
-# nothing, but fail the same way (a pending Fedora update only warns there),
-# so the PR is blocked instead of the push after merging. (The VS Code
-# Flatpak is no container: its build runs the secret part itself,
-# devtools/flatpak/build.sh.)
+# carrying a secret, known-malicious code or a critical vulnerability is
+# never published (scan.sh says what fails and why). Every job that pushes a
+# container image runs it just before the push, and pull request builds run
+# it too: they push nothing, but fail the same way (a pending Fedora update
+# only warns there), so the PR is blocked instead of the push after merging.
+# (The VS Code Flatpak is no container: its build runs the secret part
+# itself, devtools/flatpak/build.sh.)
 #
 # What needs action also becomes code scanning alerts (Security tab), one
 # category per image, so an alert closes when a later build of that image no
@@ -15,8 +15,11 @@
 # trivy is the release devtools/tools.txt pins (Renovate bumps it with the
 # rest of the development tools), fetched and checked against upstream's
 # sha256 by devtools/install.sh, so this action has no pin of its own for it.
+# It is only ever run inside containers without secrets or tokens, the scan
+# itself without network (scan.sh): a third-party binary that ran on the
+# runner could read the job's secrets out of the runner's memory.
 name: Scan an image before pushing it
-description: Fail on secrets and critical vulnerabilities in a local image
+description: Fail on secrets, known-malicious code and critical vulnerabilities in a local image
 inputs:
   image:
     description: the local image to scan (rootless podman storage)
@@ -29,11 +32,13 @@ inputs:
   upstream-paths:
     description: >-
       Path prefixes (no leading slash, whitespace-separated) holding pinned
-      upstream releases, whose findings are reported but never fail (scan.sh)
+      upstream releases, whose vulnerabilities are reported but never fail
+      (scan.sh); known-malicious code fails there too
     default: ""
 runs:
   using: composite
   steps:
+    # Fetched and checked only; scan.sh runs it in containers.
     - name: Get trivy
       id: trivy
       shell: bash
@@ -41,7 +46,6 @@ runs:
         set -euo pipefail
         bin="${RUNNER_TEMP}/scan-image"
         devtools/install.sh "$bin" trivy
-        "$bin/bin/trivy" --version | head -1
         echo "path=$bin/bin/trivy" >> "$GITHUB_OUTPUT"
 
     # Fails only when the scan itself could not finish. A verdict of "fail"

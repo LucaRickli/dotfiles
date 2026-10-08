@@ -3,7 +3,7 @@
 # Renovate bumps the versions (renovate.json, the "devtools" manager reads the
 # comment above each line).
 #
-#   name  version  asset  checksum  members
+#   name  version  asset  checksum  members  license  [source]
 #
 # version   the upstream tag as published; {v} below is it verbatim, {n} is it
 #           without a leading "v"
@@ -14,92 +14,132 @@
 # checksum  URL of the file holding upstream's sha256 for the asset, or a
 #           suffix to the asset URL (.sha256); sha256:<hex> where upstream
 #           publishes none (Renovate's github-release-attachments datasource
-#           rewrites it with the version); - where the asset is not a URL
+#           rewrites it with the version); - where the asset is not a URL.
+#           A URL may end in ,minisign:<public key> where upstream signs the
+#           file with minisign: install.sh checks <URL>.minisig against the
+#           key, so a new upstream key fails the build until the line has it
 # members   comma list of src[:dst]: src is the path in the archive, or the
 #           file itself; dst defaults to the basename of src and lands in
 #           PREFIX/bin; a dst with a "/" is relative to PREFIX (a directory,
 #           merged into what is there, when both end in "/"). For rustup: the
 #           toolchain components.
+# license   comma list of the license texts, which install.sh copies into
+#           PREFIX/share/licenses/<name>/: paths in the archive (for go:, in
+#           the module's source; for rustup, in the toolchain; ending in "/",
+#           a directory's files), or URLs of upstream's files at the same tag
+#           where the release has none, each ending in #sha256:<hex> of the
+#           file (Renovate does not bump it: a version whose text changed
+#           fails until the line has the new one); - in extensions.txt, where
+#           each .vsix carries its own
+# source    for a copyleft license (GPL, MPL) of the tool or of code built
+#           into it (`go version -m` lists a Go binary's modules, Cargo.lock
+#           at the tag a Rust one's crates), which asks for the way to the
+#           source next to the binary: URL of the source at the tag (for
+#           code built in, its go.sum or Cargo.lock names the version), which
+#           install.sh writes into PREFIX/share/licenses/<name>/SOURCES
 # A line may name Renovate's versioning after depName (versioning=...).
 
 # --- Kubernetes, Talos, containers, secrets ------------------------------------
 # renovate: datasource=github-releases depName=kubernetes/kubernetes
-kubectl v1.37.1 https://dl.k8s.io/release/{v}/bin/linux/amd64/kubectl .sha256 kubectl
+kubectl v1.37.1 https://dl.k8s.io/release/{v}/bin/linux/amd64/kubectl .sha256 kubectl https://raw.githubusercontent.com/kubernetes/kubernetes/{v}/LICENSE#sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30
 # renovate: datasource=github-releases depName=int128/kubelogin
-kubelogin v1.36.4 https://github.com/int128/kubelogin/releases/download/{v}/kubelogin_linux_amd64.zip .sha256 kubelogin:kubectl-oidc_login
+kubelogin v1.36.4 https://github.com/int128/kubelogin/releases/download/{v}/kubelogin_linux_amd64.zip .sha256 kubelogin:kubectl-oidc_login LICENSE
 # renovate: datasource=github-releases depName=skyhook-io/radar
-kubectl-radar v1.15.0 https://github.com/skyhook-io/radar/releases/download/{v}/radar_{v}_linux_amd64.tar.gz https://github.com/skyhook-io/radar/releases/download/{v}/checksums.txt kubectl-radar
+kubectl-radar v1.15.0 https://github.com/skyhook-io/radar/releases/download/{v}/radar_{v}_linux_amd64.tar.gz https://github.com/skyhook-io/radar/releases/download/{v}/checksums.txt kubectl-radar LICENSE https://github.com/skyhook-io/radar/archive/refs/tags/{v}.tar.gz
 # renovate: datasource=github-releases depName=helm/helm
-helm v4.3.0 https://get.helm.sh/helm-{v}-linux-amd64.tar.gz .sha256sum linux-amd64/helm
+helm v4.3.0 https://get.helm.sh/helm-{v}-linux-amd64.tar.gz .sha256sum linux-amd64/helm linux-amd64/LICENSE
 # renovate: datasource=github-releases depName=helmfile/helmfile
-helmfile v1.8.1 https://github.com/helmfile/helmfile/releases/download/{v}/helmfile_{n}_linux_amd64.tar.gz https://github.com/helmfile/helmfile/releases/download/{v}/helmfile_{n}_checksums.txt helmfile
+helmfile v1.8.1 https://github.com/helmfile/helmfile/releases/download/{v}/helmfile_{n}_linux_amd64.tar.gz https://github.com/helmfile/helmfile/releases/download/{v}/helmfile_{n}_checksums.txt helmfile LICENSE https://github.com/helmfile/helmfile/archive/refs/tags/{v}.tar.gz
 # renovate: datasource=github-releases depName=fluxcd/flux2
-flux v2.9.6 https://github.com/fluxcd/flux2/releases/download/{v}/flux_{n}_linux_amd64.tar.gz https://github.com/fluxcd/flux2/releases/download/{v}/flux_{n}_checksums.txt flux
+flux v2.9.6 https://github.com/fluxcd/flux2/releases/download/{v}/flux_{n}_linux_amd64.tar.gz https://github.com/fluxcd/flux2/releases/download/{v}/flux_{n}_checksums.txt flux https://raw.githubusercontent.com/fluxcd/flux2/{v}/LICENSE#sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4 https://github.com/fluxcd/flux2/archive/refs/tags/{v}.tar.gz
 # renovate: datasource=github-releases depName=siderolabs/talos
-talosctl v1.14.2 https://github.com/siderolabs/talos/releases/download/{v}/talosctl-linux-amd64 https://github.com/siderolabs/talos/releases/download/{v}/sha256sum.txt talosctl-linux-amd64:talosctl
+talosctl v1.14.2 https://github.com/siderolabs/talos/releases/download/{v}/talosctl-linux-amd64 https://github.com/siderolabs/talos/releases/download/{v}/sha256sum.txt talosctl-linux-amd64:talosctl https://raw.githubusercontent.com/siderolabs/talos/{v}/LICENSE#sha256:1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5 https://github.com/siderolabs/talos/archive/refs/tags/{v}.tar.gz
 # renovate: datasource=github-releases depName=budimanjojo/talhelper
-talhelper v3.1.17 https://github.com/budimanjojo/talhelper/releases/download/{v}/talhelper_linux_amd64.tar.gz https://github.com/budimanjojo/talhelper/releases/download/{v}/checksums.txt talhelper
+talhelper v3.1.17 https://github.com/budimanjojo/talhelper/releases/download/{v}/talhelper_linux_amd64.tar.gz https://github.com/budimanjojo/talhelper/releases/download/{v}/checksums.txt talhelper LICENSE https://github.com/budimanjojo/talhelper/archive/refs/tags/{v}.tar.gz
 # renovate: datasource=github-releases depName=google/go-containerregistry
-go-containerregistry v0.22.1 https://github.com/google/go-containerregistry/releases/download/{v}/go-containerregistry_Linux_x86_64.tar.gz https://github.com/google/go-containerregistry/releases/download/{v}/checksums.txt crane,gcrane,krane
+go-containerregistry v0.22.1 https://github.com/google/go-containerregistry/releases/download/{v}/go-containerregistry_Linux_x86_64.tar.gz https://github.com/google/go-containerregistry/releases/download/{v}/checksums.txt crane,gcrane,krane LICENSE
 # renovate: datasource=github-releases depName=aquasecurity/trivy
-trivy v0.75.0 https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_Linux-64bit.tar.gz https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_checksums.txt trivy
+trivy v0.75.0 https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_Linux-64bit.tar.gz https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_checksums.txt trivy LICENSE,https://raw.githubusercontent.com/aquasecurity/trivy/{v}/NOTICE#sha256:aed9bc6dab87c6f6567d20bf0f5c0433a8ccd3ad7873322cf79b9244eb720a1f https://github.com/aquasecurity/trivy/archive/refs/tags/{v}.tar.gz
 # renovate: datasource=github-releases depName=pete911/certinfo
-certinfo v1.0.40 https://github.com/pete911/certinfo/releases/download/{v}/certinfo_{n}_linux_amd64.tar.gz https://github.com/pete911/certinfo/releases/download/{v}/checksums.txt certinfo
+certinfo v1.0.40 https://github.com/pete911/certinfo/releases/download/{v}/certinfo_{n}_linux_amd64.tar.gz https://github.com/pete911/certinfo/releases/download/{v}/checksums.txt certinfo LICENSE
 # renovate: datasource=github-releases depName=getsops/sops
-sops v3.13.3 https://github.com/getsops/sops/releases/download/{v}/sops-{v}.linux.amd64 https://github.com/getsops/sops/releases/download/{v}/sops-{v}.checksums.txt sops-{v}.linux.amd64:sops
+sops v3.13.3 https://github.com/getsops/sops/releases/download/{v}/sops-{v}.linux.amd64 https://github.com/getsops/sops/releases/download/{v}/sops-{v}.checksums.txt sops-{v}.linux.amd64:sops https://raw.githubusercontent.com/getsops/sops/{v}/LICENSE#sha256:1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5 https://github.com/getsops/sops/archive/refs/tags/{v}.tar.gz
+# Signs and verifies the images (just cosign-keygen, just verify).
+# renovate: datasource=github-releases depName=sigstore/cosign
+cosign v3.1.3 https://github.com/sigstore/cosign/releases/download/{v}/cosign-linux-amd64 https://github.com/sigstore/cosign/releases/download/{v}/cosign_checksums.txt cosign-linux-amd64:cosign https://raw.githubusercontent.com/sigstore/cosign/{v}/LICENSE#sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4,https://raw.githubusercontent.com/sigstore/cosign/{v}/COPYRIGHT.txt#sha256:6622d1d495e7d3a0e574c65e872f823cecbe585e25708d2223a28db016229119 https://github.com/sigstore/cosign/archive/refs/tags/{v}.tar.gz
+# Boots a bootc image in a throwaway VM (just qcow2, just demo-user). Both
+# builds move it out of PATH, behind a bcvk that runs it on the host, where
+# the podman and qemu it drives are (devtools/flatpak/bcvk; in a toolbox,
+# devtools/host-command).
+# renovate: datasource=github-releases depName=bootc-dev/bcvk
+bcvk v0.21.0 https://github.com/bootc-dev/bcvk/releases/download/{v}/bcvk-x86_64-unknown-linux-gnu.tar.gz .sha256 bcvk-x86_64-unknown-linux-gnu:bcvk https://raw.githubusercontent.com/bootc-dev/bcvk/{v}/LICENSE-APACHE#sha256:c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08,https://raw.githubusercontent.com/bootc-dev/bcvk/{v}/LICENSE-MIT#sha256:23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3 https://github.com/bootc-dev/bcvk/archive/refs/tags/{v}.tar.gz
 
 # --- Go ----------------------------------------------------------------------
 # Go first: the go: lines below build with it.
 # renovate: datasource=golang-version depName=golang
-go 1.27.1 https://dl.google.com/go/go{v}.linux-amd64.tar.gz .sha256 go/:go/
+go 1.27.1 https://dl.google.com/go/go{v}.linux-amd64.tar.gz .sha256 go/:go/ go/LICENSE,go/PATENTS
 # renovate: datasource=go depName=golang.org/x/tools/gopls
-gopls v0.23.0 go:golang.org/x/tools/gopls - gopls
+gopls v0.23.0 go:golang.org/x/tools/gopls - gopls LICENSE
 # renovate: datasource=go depName=github.com/go-delve/delve
-dlv v1.27.2 go:github.com/go-delve/delve/cmd/dlv - dlv
+dlv v1.27.2 go:github.com/go-delve/delve/cmd/dlv - dlv LICENSE
 # renovate: datasource=github-releases depName=dominikh/go-tools
-staticcheck 2026.2.1 go:honnef.co/go/tools/cmd/staticcheck - staticcheck
+staticcheck 2026.2.1 go:honnef.co/go/tools/cmd/staticcheck - staticcheck LICENSE,LICENSE-THIRD-PARTY
 # renovate: datasource=go depName=mvdan.cc/gofumpt
-gofumpt v0.12.0 go:mvdan.cc/gofumpt - gofumpt
+gofumpt v0.12.0 go:mvdan.cc/gofumpt - gofumpt LICENSE,LICENSE.google
 # renovate: datasource=github-releases depName=golangci/golangci-lint
-golangci-lint v2.14.0 https://github.com/golangci/golangci-lint/releases/download/{v}/golangci-lint-{n}-linux-amd64.tar.gz https://github.com/golangci/golangci-lint/releases/download/{v}/golangci-lint-{n}-checksums.txt golangci-lint-{n}-linux-amd64/golangci-lint
+golangci-lint v2.14.0 https://github.com/golangci/golangci-lint/releases/download/{v}/golangci-lint-{n}-linux-amd64.tar.gz https://github.com/golangci/golangci-lint/releases/download/{v}/golangci-lint-{n}-checksums.txt golangci-lint-{n}-linux-amd64/golangci-lint golangci-lint-{n}-linux-amd64/LICENSE https://github.com/golangci/golangci-lint/archive/refs/tags/{v}.tar.gz
 # age publishes no sha256 (only Sigsum proofs), so it is built from its module.
 # renovate: datasource=go depName=filippo.io/age
-age v1.3.2 go:filippo.io/age/cmd/... - age,age-keygen,age-inspect,age-plugin-batchpass
+age v1.3.2 go:filippo.io/age/cmd/... - age,age-keygen,age-inspect,age-plugin-batchpass LICENSE
 # --- Protocol Buffers ----------------------------------------------------------
 # protoc finds the well-known types (google/protobuf/*.proto) in ../include.
 # renovate: datasource=github-release-attachments depName=protocolbuffers/protobuf
-protoc v36.2 https://github.com/protocolbuffers/protobuf/releases/download/{v}/protoc-{n}-linux-x86_64.zip sha256:121f6c7afe1d4d0e3ea6aab9432038599250134cbf4474cb1167d2c7decd4278 bin/protoc,include/:include/
+protoc v36.2 https://github.com/protocolbuffers/protobuf/releases/download/{v}/protoc-{n}-linux-x86_64.zip sha256:121f6c7afe1d4d0e3ea6aab9432038599250134cbf4474cb1167d2c7decd4278 bin/protoc,include/:include/ https://raw.githubusercontent.com/protocolbuffers/protobuf/{v}/LICENSE#sha256:6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d
 # renovate: datasource=github-releases depName=bufbuild/buf
-buf v1.73.0 https://github.com/bufbuild/buf/releases/download/{v}/buf-Linux-x86_64 https://github.com/bufbuild/buf/releases/download/{v}/sha256.txt buf-Linux-x86_64:buf
+buf v1.73.0 https://github.com/bufbuild/buf/releases/download/{v}/buf-Linux-x86_64 https://github.com/bufbuild/buf/releases/download/{v}/sha256.txt buf-Linux-x86_64:buf https://raw.githubusercontent.com/bufbuild/buf/{v}/LICENSE#sha256:995b27237c0d8ef8c970d36da9e81f1472790ae18f3d7d5a966781b53d78f242
 # renovate: datasource=go depName=google.golang.org/protobuf
-protoc-gen-go v1.36.12 go:google.golang.org/protobuf/cmd/protoc-gen-go - protoc-gen-go
+protoc-gen-go v1.36.12 go:google.golang.org/protobuf/cmd/protoc-gen-go - protoc-gen-go LICENSE,PATENTS
 # renovate: datasource=go depName=google.golang.org/grpc/cmd/protoc-gen-go-grpc
-protoc-gen-go-grpc v1.6.2 go:google.golang.org/grpc/cmd/protoc-gen-go-grpc - protoc-gen-go-grpc
+protoc-gen-go-grpc v1.6.2 go:google.golang.org/grpc/cmd/protoc-gen-go-grpc - protoc-gen-go-grpc LICENSE,https://raw.githubusercontent.com/grpc/grpc-go/cmd/protoc-gen-go-grpc/{v}/NOTICE.txt#sha256:693ff28ec216d5112ac1bbfe64ef539005867d1c7bd427b57d579683293b947f
 
 # --- Deno, Rust ----------------------------------------------------------------
 # renovate: datasource=github-releases depName=denoland/deno
-deno v2.9.7 https://github.com/denoland/deno/releases/download/{v}/deno-x86_64-unknown-linux-gnu.zip .sha256sum deno
+deno v2.9.7 https://github.com/denoland/deno/releases/download/{v}/deno-x86_64-unknown-linux-gnu.zip .sha256sum deno https://raw.githubusercontent.com/denoland/deno/{v}/LICENSE.md#sha256:f62497fffecc0852960c8d3e6934b9db86d16396e9b604072e923892cae3a588 https://github.com/denoland/deno/archive/refs/tags/{v}.tar.gz
 # rustup-init, then the toolchain through it.
 # renovate: datasource=github-tags depName=rust-lang/rustup
-rustup 1.29.1 https://static.rust-lang.org/rustup/archive/{v}/x86_64-unknown-linux-gnu/rustup-init .sha256 rustup-init
+rustup 1.29.1 https://static.rust-lang.org/rustup/archive/{v}/x86_64-unknown-linux-gnu/rustup-init .sha256 rustup-init https://raw.githubusercontent.com/rust-lang/rustup/{v}/LICENSE-APACHE#sha256:8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90,https://raw.githubusercontent.com/rust-lang/rustup/{v}/LICENSE-MIT#sha256:c9a75f18b9ab2927829a208fc6aa2cf4e63b8420887ba29cdb265d6619ae82d5
 # renovate: datasource=github-releases depName=rust-lang/rust
-rust 1.99.0 rustup - clippy,rustfmt,rust-src,rust-analyzer
+rust 1.99.0 rustup - clippy,rustfmt,rust-src,rust-analyzer share/doc/rust/COPYRIGHT.html,share/doc/rust/licenses/ https://static.rust-lang.org/dist/rustc-{v}-src.tar.xz
 
 # --- Shell and CLI tools -------------------------------------------------------
 # fish, as on the host (the Flatpak's terminal runs it with your dotfiles). One
 # static binary with its functions built in; upstream publishes no sha256.
 # renovate: datasource=github-release-attachments depName=fish-shell/fish-shell
-fish 4.9.3 https://github.com/fish-shell/fish-shell/releases/download/{v}/fish-{v}-linux-x86_64.tar.xz sha256:8f643d10ad1abb0ef7072764c01ceb5cf61b2d373fda400cf60f0bad69b7e095 fish
+fish 4.9.3 https://github.com/fish-shell/fish-shell/releases/download/{v}/fish-{v}-linux-x86_64.tar.xz sha256:8f643d10ad1abb0ef7072764c01ceb5cf61b2d373fda400cf60f0bad69b7e095 fish https://raw.githubusercontent.com/fish-shell/fish-shell/{v}/COPYING#sha256:41f2f3709337de306838f27cedebf345c5d4690f68ecced154d57349ca63b85a,https://raw.githubusercontent.com/fish-shell/fish-shell/{v}/doc_src/license.rst#sha256:194f4436b9446954e5fc283c04ec5c70a31ec3b9b01dec3a55c23cc4f8072fec https://github.com/fish-shell/fish-shell/archive/refs/tags/{v}.tar.gz
+# Other versions of the toolchains, per project (mise.toml), with its fish
+# file that activates it in every fish. mise-system.sh adds its settings and
+# makes the Go and Deno here its own installs. The key is jdx's
+# (https://mise.jdx.dev/installing-mise.html).
+# renovate: datasource=github-releases depName=jdx/mise
+mise v2026.10.4 https://github.com/jdx/mise/releases/download/{v}/mise-{v}-linux-x64-musl.tar.gz https://github.com/jdx/mise/releases/download/{v}/SHASUMS256.txt,minisign:RWTC3g8W3z4RZK3V3qv7fa1QY4JEWyBtqIHW+85QlJpZc5yG+uNYNBSZ mise/bin/mise,mise/share/fish/vendor_conf.d/mise-activate.fish:share/fish/vendor_conf.d/mise-activate.fish mise/LICENSE https://github.com/jdx/mise/archive/refs/tags/{v}.tar.gz
 # renovate: datasource=github-releases depName=BurntSushi/ripgrep
-ripgrep 15.2.0 https://github.com/BurntSushi/ripgrep/releases/download/{v}/ripgrep-{v}-x86_64-unknown-linux-musl.tar.gz .sha256 ripgrep-{v}-x86_64-unknown-linux-musl/rg
+ripgrep 15.2.0 https://github.com/BurntSushi/ripgrep/releases/download/{v}/ripgrep-{v}-x86_64-unknown-linux-musl.tar.gz .sha256 ripgrep-{v}-x86_64-unknown-linux-musl/rg ripgrep-{v}-x86_64-unknown-linux-musl/COPYING,ripgrep-{v}-x86_64-unknown-linux-musl/LICENSE-MIT,ripgrep-{v}-x86_64-unknown-linux-musl/UNLICENSE
 # renovate: datasource=github-release-attachments depName=sharkdp/fd
-fd v10.5.0 https://github.com/sharkdp/fd/releases/download/{v}/fd-{v}-x86_64-unknown-linux-musl.tar.gz sha256:761c72dc8e120d85b22292063be8a796e2eeb20eb3e4f38b8fa2343ccf3514a7 fd-{v}-x86_64-unknown-linux-musl/fd
+fd v10.5.0 https://github.com/sharkdp/fd/releases/download/{v}/fd-{v}-x86_64-unknown-linux-musl.tar.gz sha256:761c72dc8e120d85b22292063be8a796e2eeb20eb3e4f38b8fa2343ccf3514a7 fd-{v}-x86_64-unknown-linux-musl/fd fd-{v}-x86_64-unknown-linux-musl/LICENSE-APACHE,fd-{v}-x86_64-unknown-linux-musl/LICENSE-MIT
 # renovate: datasource=github-releases depName=casey/just
-just 1.58.0 https://github.com/casey/just/releases/download/{v}/just-{v}-x86_64-unknown-linux-musl.tar.gz https://github.com/casey/just/releases/download/{v}/SHA256SUMS just
+just 1.58.0 https://github.com/casey/just/releases/download/{v}/just-{v}-x86_64-unknown-linux-musl.tar.gz https://github.com/casey/just/releases/download/{v}/SHA256SUMS just LICENSE https://github.com/casey/just/archive/refs/tags/{v}.tar.gz
 # renovate: datasource=github-releases depName=cli/cli
-gh v2.102.0 https://github.com/cli/cli/releases/download/{v}/gh_{n}_linux_amd64.tar.gz https://github.com/cli/cli/releases/download/{v}/gh_{n}_checksums.txt gh_{n}_linux_amd64/bin/gh
+gh v2.102.0 https://github.com/cli/cli/releases/download/{v}/gh_{n}_linux_amd64.tar.gz https://github.com/cli/cli/releases/download/{v}/gh_{n}_checksums.txt gh_{n}_linux_amd64/bin/gh gh_{n}_linux_amd64/LICENSE https://github.com/cli/cli/archive/refs/tags/{v}.tar.gz
+# yq's checksums file holds twenty hashes per asset, not a sha256 list.
+# renovate: datasource=github-release-attachments depName=mikefarah/yq
+yq v4.54.1 https://github.com/mikefarah/yq/releases/download/{v}/yq_linux_amd64 sha256:8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f yq_linux_amd64:yq https://raw.githubusercontent.com/mikefarah/yq/{v}/LICENSE#sha256:697db34dabb21562fe84487a2ccd031fbd45382b89c2cbdec8ef31682c486040 https://github.com/mikefarah/yq/archive/refs/tags/{v}.tar.gz
 # renovate: datasource=github-release-attachments depName=koalaman/shellcheck
-shellcheck v0.11.0 https://github.com/koalaman/shellcheck/releases/download/{v}/shellcheck-{v}.linux.x86_64.tar.xz sha256:8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198 shellcheck-{v}/shellcheck
-# Runs a command on the host from a Flatpak or toolbox (podman, below it).
+shellcheck v0.11.0 https://github.com/koalaman/shellcheck/releases/download/{v}/shellcheck-{v}.linux.x86_64.tar.xz sha256:8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198 shellcheck-{v}/shellcheck shellcheck-{v}/LICENSE.txt https://github.com/koalaman/shellcheck/archive/refs/tags/{v}.tar.gz
+# Lints the workflows, with the shellcheck above for their run: blocks.
+# renovate: datasource=github-releases depName=rhysd/actionlint
+actionlint v1.7.12 https://github.com/rhysd/actionlint/releases/download/{v}/actionlint_{n}_linux_amd64.tar.gz https://github.com/rhysd/actionlint/releases/download/{v}/actionlint_{n}_checksums.txt actionlint LICENSE.txt
+# Runs a command on the host from a Flatpak or toolbox: the podman, docker,
+# qemu and bcvk both builds have (devtools/flatpak/host-command and bcvk,
+# devtools/host-command).
 # renovate: datasource=github-release-attachments depName=1player/host-spawn
-host-spawn v1.6.2 https://github.com/1player/host-spawn/releases/download/{v}/host-spawn-x86_64 sha256:077bc09a087292447ba17cfe2156a93f71bf56c4c6be8e38d3abe65c1240f34c host-spawn-x86_64:host-spawn
+host-spawn v1.6.2 https://github.com/1player/host-spawn/releases/download/{v}/host-spawn-x86_64 sha256:077bc09a087292447ba17cfe2156a93f71bf56c4c6be8e38d3abe65c1240f34c host-spawn-x86_64:host-spawn https://raw.githubusercontent.com/1player/host-spawn/{v}/LICENSE#sha256:dbef2ff1c462128500e7c44ae794de6f98f3efb6f6d213dffb0621a0a68c0de1

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Builds what Fedora does not package: every base feature's build.sh, run by
-# the Containerfile's `builds` stage. That stage starts from the image's
+# image/base.Containerfile's `builds` stage. That stage starts from the image's
 # base, so what it builds links against the libraries the image ships and a
 # base update rebuilds it, and it is thrown away, so no toolchain reaches the
 # image. The builds run one after the other in that one system: a package one

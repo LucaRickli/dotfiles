@@ -1,7 +1,10 @@
 # Build the development container (devtools/Containerfile) and push it to
-# ghcr.io/<owner>/devcontainer as :latest and :<yyyymmdd>. Weekly as well, so
-# the Fedora packages in it stay current without a commit. Pull requests get
-# it through ci.yml, the PR gate, and only build, test and scan.
+# ghcr.io/<owner>/devcontainer as :latest and :<yyyymmdd>, signed with the
+# cosign key: on a machine running this OS, podman refuses it unsigned (its
+# policy.json), so toolbox and Dev Containers on podman do too; docker reads
+# no policy.json. Weekly as well, so the Fedora packages in it stay current
+# without a commit. Pull requests get it through ci.yml, the PR gate, and
+# only build, test and scan.
 name: devcontainer
 
 on:
@@ -9,6 +12,12 @@ on:
     branches: [main]
     paths:
       - "devtools/Containerfile"
+      - "devtools/host-command"
+      - "devtools/claude"
+      - "devtools/claude-code.sh"
+      - "devtools/claude-code.asc"
+      - "devtools/mise-system.sh"
+      - "devtools/mise-config.toml"
       - "devtools/tools.txt"
       - "devtools/extensions.txt"
       - "devtools/install.sh"
@@ -20,9 +29,12 @@ on:
   workflow_dispatch:
   workflow_call:
 
+# Only pull requests supersede each other. Any other run waits for the one
+# before it, which, cancelled between its push and `sign`, would leave the
+# tags on an unsigned image.
 concurrency:
   group: devcontainer-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
@@ -58,12 +70,89 @@ jobs:
       # the user Dev Containers connects as.
       - name: Test
         run: |
-          podman run --rm --user dev -v "$PWD/devtools/test.sh":/run/test.sh:ro "$LOCAL" bash -l /run/test.sh
+          podman run --rm --user dev -v "$PWD/devtools/test.sh":/run/test.sh:ro \
+            -v "$PWD/devtools/tools.txt":/run/tools.txt:ro "$LOCAL" bash -l /run/test.sh
           podman run --rm --user dev "$LOCAL" bash -lc '
             set -eux
             ls ~/.vscode-server/extensions | grep -E "^golang\.go-"
             ls ~/.vscode-server/extensions | grep -E "^denoland\.vscode-deno-"
             ls ~/.vscode-server/extensions | grep -E "^rust-lang\.rust-analyzer-"'
+          # The host's podman, docker and qemu (devtools/host-command): with
+          # no session bus, as here and in any Dev Container, they say so; one
+          # installed in the container wins. Also where the links come up
+          # twice on PATH (/usr/local/sbin is a link to bin): under sudo, and
+          # on a host PATH that a toolbox passes on.
+          podman run --rm --user dev "$LOCAL" bash -c '
+            set -eux
+            for c in podman docker qemu-img qemu-system-x86_64; do
+              rc=0; "$c" --version 2>/tmp/err || rc=$?
+              test "$rc" = 127
+              grep -q "session bus" /tmp/err
+              rc=0; timeout 10 sudo "$c" --version 2>/tmp/err || rc=$?
+              test "$rc" = 127
+              grep -q "session bus" /tmp/err
+              rc=0; PATH=/usr/local/sbin:$PATH timeout 10 "$c" --version 2>/tmp/err || rc=$?
+              test "$rc" = 127
+              grep -q "session bus" /tmp/err
+            done
+            mkdir /tmp/bin && printf "#!/bin/sh\necho installed\n" >/tmp/bin/podman && chmod +x /tmp/bin/podman
+            test "$(PATH=$PATH:/tmp/bin podman)" = installed
+            sudo install /tmp/bin/podman /usr/bin/podman
+            test "$(timeout 10 sudo podman)" = installed'
+          # Claude Code (devtools/claude): the image holds only its pin, the
+          # Flatpak's version with Anthropic's URL, sha256 and size, and
+          # nothing is downloaded here. Offline it fails and leaves nothing
+          # behind; its updates are off.
+          pin=$(sed -n 's/^ARG CLAUDE_VERSION=//p' devtools/Containerfile)
+          test "$pin" = "$(sed -n 's/^CLAUDE_VERSION=//p' devtools/flatpak/build.sh)"
+          podman run --rm --user dev --network=none -e PIN="$pin" "$LOCAL" bash -c '
+            set -eux
+            read -r version url sha256 size </usr/local/share/claude-code/pin
+            test "$version" = "$PIN"
+            test "$url" = "https://downloads.claude.ai/claude-code-releases/$PIN/linux-x64/claude"
+            [[ $sha256 =~ ^[0-9a-f]{64}$ && $size =~ ^[1-9][0-9]*$ ]]
+            rc=0; claude --version 2>/tmp/err || rc=$?
+            test "$rc" = 1
+            grep -q "nothing installed" /tmp/err
+            test -z "$(ls -A ~/.local/share/claude-code/"$PIN")"
+            test "$DISABLE_UPDATES" = 1 && test "$DISABLE_INSTALLATION_CHECKS" = 1'
+          # EDITOR in a Dev Containers terminal (VS Code's remote `code` on
+          # PATH, its socket in VSCODE_IPC_HOOK_CLI) is that window; elsewhere
+          # Fedora's default.
+          podman run --rm --user dev "$LOCAL" bash -c '
+            set -eux
+            mkdir /tmp/cli && printf "#!/bin/sh\n" >/tmp/cli/code && chmod +x /tmp/cli/code
+            python3 -c "import socket; socket.socket(socket.AF_UNIX).bind(\"/tmp/ipc.sock\")"
+            hook="env VSCODE_IPC_HOOK_CLI=/tmp/ipc.sock PATH=/tmp/cli:$PATH EDITOR=/usr/bin/nano"
+            test "$($hook bash -ic "git var GIT_EDITOR" 2>/dev/null)" = "code --wait"
+            test "$($hook fish -c "git var GIT_EDITOR")" = "code --wait"
+            test "$(bash -ic "git var GIT_EDITOR" 2>/dev/null)" = /usr/bin/nano
+            test "$(fish -c "git var GIT_EDITOR")" = /usr/bin/nano'
+          # mise (devtools/mise-system.sh) with no network: the Go and Deno of
+          # tools.txt are its installs. fish activates it also where
+          # XDG_DATA_DIRS leaves out /usr/local/share (a toolbox passes the
+          # host's on), and only once; a mise.toml changed since `mise trust`
+          # waits for it again. Its shims come after the image's tools on a
+          # login shell's PATH.
+          go=$(awk '$1 == "go" { print $2 }' devtools/tools.txt)
+          deno=$(awk '$1 == "deno" { sub(/^v/, "", $2); print $2 }' devtools/tools.txt)
+          podman run --rm --user dev --network=none -e GO="$go" -e DENO="$deno" "$LOCAL" bash -c '
+            set -eux
+            cd "$(mktemp -d)"
+            printf "[tools]\ngo = \"%s\"\ndeno = \"%s\"\n" "$GO" "$DENO" >mise.toml
+            mise trust -q
+            test "$(PATH=/usr/local/bin mise exec -- go env GOVERSION)" = "go$GO"
+            test "$(PATH=/usr/local/bin mise exec -- deno --version | head -1 | cut -d" " -f2)" = "$DENO"
+            test "$(XDG_DATA_DIRS=/usr/share fish -c "go env GOROOT")" = "/usr/local/share/mise/installs/go/$GO"
+            printf "[tools]\ngo = \"1.20.0\"\n" >mise.toml
+            test "$(fish -c true 2>&1 | grep -c "is not trusted")" = 1
+            mise trust -q
+            test "$(fish -c true 2>&1 | grep -c "missing: go@1.20.0")" = 1
+            shims=~/.local/share/mise/shims
+            mkdir -p "$shims" && printf "#!/bin/sh\necho shim\n" | tee "$shims/go" >"$shims/node"
+            chmod +x "$shims/go" "$shims/node"
+            test "$(bash -lc "command -v go")" = /usr/local/go/bin/go
+            test "$(bash -lc node)" = shim'
 
       # Before the push (.github/actions/scan-image). Everything outside
       # Fedora's packages is a pinned upstream release: the tools under
@@ -83,9 +172,59 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Each tag's digest, for `sign` (both are the same image, so usually
+      # one digest).
       - name: Push
         if: github.event_name != 'pull_request'
         run: |
+          set -euo pipefail
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/devcontainer"
-          podman push --retry 5 --retry-delay 15s "$LOCAL" "$image:latest"
-          podman push --retry 5 --retry-delay 15s "$LOCAL" "$image:$(date -u +%Y%m%d)"
+          for tag in latest "$(date -u +%Y%m%d)"; do
+            podman push --retry 5 --retry-delay 15s --digestfile "${RUNNER_TEMP}/digest" "$LOCAL" "$image:$tag"
+            echo "${image}@$(cat "${RUNNER_TEMP}/digest")" >> "${RUNNER_TEMP}/pushed.txt"
+          done
+          mkdir -p "${RUNNER_TEMP}/pushed"
+          sort -u "${RUNNER_TEMP}/pushed.txt" > "${RUNNER_TEMP}/pushed/devcontainer"
+
+      - name: Record the digest
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pushed-devcontainer
+          path: ${{ runner.temp }}/pushed/devcontainer
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+
+  # The cosign key in a job of its own that runs nothing but checkout, the
+  # artifact download and cosign, as build.yml's `sign` (.github/actions/sign
+  # has the why). Until it has run, the new tags are unsigned, and a machine
+  # refuses to pull them.
+  sign:
+    name: sign
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    environment: release   # the cosign key
+    permissions:
+      contents: read    # keys/cosign.pub
+      packages: write   # the signature
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: The pushed digest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: pushed-devcontainer
+          path: ${{ runner.temp }}/pushed
+
+      - name: Sign and verify
+        uses: ./.github/actions/sign
+        with:
+          refs-dir: ${{ runner.temp }}/pushed
+          cosign-key: ${{ secrets.SIGNING_SECRET }}
+          registry-token: ${{ github.token }}

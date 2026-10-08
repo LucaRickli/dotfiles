@@ -1,8 +1,8 @@
 # Make it yours
 
-To build and publish your own copy. Needs rootless `podman`, `just`, `sbctl`
-and `cosign`, plus [`bcvk`](https://github.com/bootc-dev/bcvk), `qemu` and
-OVMF for VM tests (the recipes assume Arch paths).
+To build and publish your own copy. Needs rootless `podman`, `just`, `yq`,
+`jq`, `sbctl` and `cosign`, plus [`bcvk`](https://github.com/bootc-dev/bcvk),
+`qemu` and OVMF for VM tests (Arch's or Fedora's edk2-ovmf).
 
 1. Fork and point everything at your fork:
 
@@ -13,8 +13,10 @@ OVMF for VM tests (the recipes assume Arch paths).
      -e 's/lucarickli/<you, lowercase>/g'
    ```
 
-2. Replace the keys with your own; commit the public halves and back up every
-   `.key` file ([keys/README.md](../keys/README.md)):
+2. Replace the keys with your own: the certificates and the public key go
+   into `keys/` (commit them), the private keys into the key directory
+   `~/.local/share/fedora-bootc/keys` (back it up,
+   [keys/README.md](../keys/README.md)):
 
    ```sh
    git rm -r keys/GUID keys/PK keys/KEK keys/db keys/cosign.pub
@@ -22,8 +24,13 @@ OVMF for VM tests (the recipes assume Arch paths).
    just cosign-keygen   # image signing key pair
    ```
 
-3. Add the repository secrets `SECUREBOOT_PRIVATE_KEY` (`keys/db/db.key`) and
-   `SIGNING_SECRET` (`keys/cosign.key`).
+3. Create the environment `release` (Settings, Environments), limit its
+   deployment branches to `main` and, for a release published by hand, the
+   release tags, and add two secrets to it: `SECUREBOOT_PRIVATE_KEY` (the key
+   directory's `db/db.key`) and `SIGNING_SECRET` (its `cosign.key`). Only
+   the jobs that declare that environment read them, so no workflow on
+   another branch can. Repository secrets of those names work too, without
+   that limit.
 4. CI runs on GitHub's free hosted runners (`ubuntu-26.04`, rootless podman);
    nothing to install. A public repository gets the ~90 GB of disk a sealed
    build needs. In the repository settings: allow auto-merge, and import
