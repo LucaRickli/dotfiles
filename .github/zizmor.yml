@@ -1,0 +1,10 @@
+# zizmor (https://docs.zizmor.sh/), the GitHub Actions audit, with its
+# findings that are by design here. Everything else it reports is meant to
+# be fixed, not listed.
+rules:
+  # It wants local actions as `$/.github/actions/...` instead of
+  # `./.github/actions/...`. actionlint 1.7.12 (ci.yml's lint job, the
+  # current release) rejects that form ("ref is missing"), so the `./`
+  # form stays until actionlint accepts the other one.
+  self-repository:
+    disable: true

@@ -5,10 +5,10 @@
 #
 # Why one gate instead of a pull_request trigger on each workflow:
 #
-# - The image build is a chain (base -> build matrix) whose later jobs only
-#   exist once the earlier ones finished. "Every check so far is green"
-#   can be true in the gap between two links, and an automerge that looks at
-#   that merges a PR whose build has not even started.
+# - The image build is a chain (plan and base, then one job per image) whose
+#   later jobs only exist once the earlier ones finished. "Every check so
+#   far is green" can be true in the gap between two links, and an automerge
+#   that looks at that merges a PR whose build has not even started.
 # - check.yml, devcontainer.yml and flatpak.yml only matter for some paths.
 #   A required check from a path-filtered workflow never reports on the PRs
 #   it skips, and blocks them forever.
@@ -20,18 +20,20 @@
 # PR); what lands is built again by build.yml on the push, and notify.yml
 # reports it if that fails.
 #
-# What a PR gets: lint always; the image build (both variants, sealed),
+# What a PR gets: lint always; the image build (every image, sealed),
 # check.yml, devcontainer.yml and flatpak.yml when the PR can affect them; a
-# rehearsal of the publishing steps (push, sign, verify, promote) always; and
-# the live ISO when something it is made of changes. Together that runs every
+# rehearsal of the publishing steps (push, sign, verify, promote) always; the
+# live ISO when something it is made of changes; and the development tool
+# pins against upstream's signatures when one changes. Together that runs every
 # tool the merge will later publish with, so an automerged update of one is
 # tested before it lands.
 #
 # On a push to main only the lint job and the signing rehearsal run, and only
-# when CI plumbing or scripts/ changed (build.yml, check.yml, devcontainer.yml
-# and flatpak.yml run themselves on push): those files are in build.yml's
-# paths-ignore, and without this a push touching only them would run no CI at
-# all.
+# when CI plumbing, scripts/, installer/ or devtools/verify-pins.sh changed
+# (build.yml, check.yml, devcontainer.yml and flatpak.yml run themselves on
+# push): those files are in build.yml's paths-ignore, and without this a push
+# touching only them would run no CI at all. The ISO itself is built by
+# release.yml.
 name: ci
 
 on:
@@ -43,6 +45,8 @@ on:
       - ".github/**"
       - "renovate.json"
       - "scripts/**"
+      - "installer/**"
+      - "devtools/verify-pins.sh"
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -58,7 +62,10 @@ defaults:
 jobs:
   # Which of the expensive workflows this PR can affect. The image rule is
   # build.yml's `paths-ignore` turned around: anything not listed there can
-  # change the image. This workflow itself counts as everything, so a change to
+  # change the image. The publishing actions (publish, sign) are the one
+  # exception: build.yml runs them on push only, so a pull request's image
+  # build would not exercise them (lint checks them, `signing` rehearses
+  # their commands). This workflow itself counts as everything, so a change to
   # the wiring runs all of it, and so does the shared prepare-runner action.
   changes:
     runs-on: ubuntu-26.04
@@ -72,6 +79,7 @@ jobs:
       flatpak: ${{ steps.classify.outputs.flatpak }}
       renovate: ${{ steps.classify.outputs.renovate }}
       iso: ${{ steps.classify.outputs.iso }}
+      pins: ${{ steps.classify.outputs.pins }}
     steps:
       - name: Classify the changed files
         id: classify
@@ -84,7 +92,7 @@ jobs:
           set -euo pipefail
           if [ "$EVENT" = push ]; then
             # The other workflows run on push by themselves; here only lint.
-            printf '%s\n' image=false dotfiles=false devcontainer=false flatpak=false renovate=true iso=false | tee -a "$GITHUB_OUTPUT"
+            printf '%s\n' image=false dotfiles=false devcontainer=false flatpak=false renovate=true iso=false pins=false | tee -a "$GITHUB_OUTPUT"
             exit 0
           fi
           # Both names of a rename: moving a file out of the image's paths
@@ -93,11 +101,11 @@ jobs:
             --jq '.[] | .filename, (.previous_filename // empty)' > files.txt
           echo "changed files:"; sed 's/^/  /' files.txt
 
-          image=false dotfiles=false devcontainer=false flatpak=false renovate=false iso=false
+          image=false dotfiles=false devcontainer=false flatpak=false renovate=false iso=false pins=false
           while IFS= read -r f; do
             case "$f" in
               .github/workflows/ci.yml)
-                image=true; dotfiles=true; devcontainer=true; flatpak=true; renovate=true; iso=true ;;
+                image=true; dotfiles=true; devcontainer=true; flatpak=true; renovate=true; iso=true; pins=true ;;
               # used by every job that runs podman
               .github/actions/prepare-runner/*)
                 image=true; dotfiles=true; devcontainer=true; flatpak=true; iso=true ;;
@@ -105,9 +113,13 @@ jobs:
               # the Flatpak's secret scan
               .github/actions/scan-image/*)
                 image=true; devcontainer=true; flatpak=true; iso=true ;;
+              # installs just for every job that runs recipes (lint always)
+              .github/actions/install-tools/*)
+                image=true; flatpak=true; iso=true ;;
               # the tools both development builds install; also pins the trivy
-              # every scan uses. The OS images are not rebuilt for a trivy
-              # bump: the live image and the dev container run the same scan.
+              # every scan uses and the just every job runs. The OS images
+              # are not rebuilt for a bump of those: the live image and the
+              # dev container run the same scan, and lint runs just.
               devtools/tools.txt|devtools/install.sh)
                 devcontainer=true; flatpak=true; iso=true ;;
               # the VS Code extensions both carry
@@ -116,12 +128,20 @@ jobs:
               # the test both development builds run
               devtools/test.sh)
                 devcontainer=true; flatpak=true ;;
+              # the dev container's own host shim and Claude Code shim
+              devtools/host-command|devtools/claude)
+                devcontainer=true ;;
+              # both development builds: Claude Code's signed manifest check
+              # and mise's system setup
+              devtools/claude-code.sh|devtools/claude-code.asc|devtools/mise-system.sh|devtools/mise-config.toml)
+                devcontainer=true; flatpak=true ;;
             esac
             case "$f" in
-              *.md|docs/*|home/*|dotfiles.sh|scripts/*|flatpaks.txt|devtools/*|renovate.json|\
+              *.md|docs/*|home/*|dotfiles.sh|scripts/*|flatpaks.txt|devtools/*|installer/*|renovate.json|\
               .github/workflows/check.yml|.github/workflows/devcontainer.yml|\
               .github/workflows/flatpak.yml|.github/workflows/ci.yml|.github/workflows/notify.yml|\
-              .github/workflows/release.yml|.github/rulesets/*) ;;
+              .github/workflows/release.yml|.github/rulesets/*|.github/actionlint.yaml|.github/zizmor.yml|\
+              .github/actions/publish/*|.github/actions/sign/*) ;;
               *) image=true ;;
             esac
             case "$f" in
@@ -137,11 +157,15 @@ jobs:
             case "$f" in
               renovate.json) renovate=true ;;
             esac
-            # What the live ISO is made of (the `live` stage: base image,
-            # installer/, the signature policy and key) and how release.yml and
-            # the Justfile assemble it.
+            # The pins, and how they are checked against upstream.
             case "$f" in
-              Containerfile|.containerignore|Justfile|installer/*|features/updates/overlay/etc/containers/*|keys/cosign.pub|\
+              devtools/tools.txt|devtools/extensions.txt|devtools/verify-pins.sh) pins=true ;;
+            esac
+            # What the live ISO is made of (installer/live.Containerfile and
+            # the rest of installer/, the signature policy and key, the build
+            # context) and how release.yml and the Justfile assemble it.
+            case "$f" in
+              .containerignore|Justfile|installer/*|features/updates/overlay/etc/containers/*|keys/cosign.pub|\
               .github/workflows/release.yml) iso=true ;;
             esac
           done < files.txt
@@ -149,7 +173,7 @@ jobs:
           # everything rather than trusting a truncated list.
           if [ "${CHANGED:-0}" -ge 3000 ]; then
             echo "::notice::${CHANGED} changed files, more than the API lists: running everything"
-            image=true dotfiles=true devcontainer=true flatpak=true renovate=true iso=true
+            image=true dotfiles=true devcontainer=true flatpak=true renovate=true iso=true pins=true
           fi
           {
             echo "image=$image"
@@ -158,11 +182,13 @@ jobs:
             echo "flatpak=$flatpak"
             echo "renovate=$renovate"
             echo "iso=$iso"
+            echo "pins=$pins"
           } | tee -a "$GITHUB_OUTPUT"
 
   # Cheap, and on every PR: the workflow files themselves (actionlint runs
-  # shellcheck on every `run:` block), the shell syntax of every script and
-  # the features (`just check-syntax`: `just check` without the dotfile
+  # shellcheck on every `run:` block, zizmor audits them for supply-chain
+  # and permission mistakes), the shell syntax of every script and the
+  # features (`just check-syntax`: `just check` without the dotfile
   # validation, which needs the image), and the Renovate config when it
   # changed.
   lint:
@@ -172,6 +198,8 @@ jobs:
     env:
       # renovate: datasource=docker depName=docker.io/rhysd/actionlint
       ACTIONLINT_VERSION: "1.7.12"
+      # renovate: datasource=github-releases depName=zizmorcore/zizmor
+      ZIZMOR_VERSION: "v1.30.1"
       # renovate: datasource=npm depName=renovate
       RENOVATE_VERSION: "44.131.0"
     steps:
@@ -185,10 +213,37 @@ jobs:
           docker run --rm -v "$PWD":/repo:ro --workdir /repo \
             "docker.io/rhysd/actionlint:${ACTIONLINT_VERSION}" -color
 
-      - name: Install just
-        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+      - name: Install just and gh
+        uses: ./.github/actions/install-tools
         with:
-          just-version: "1.58.0"
+          tools: just gh
+
+      # The release binary, run only once GitHub's build provenance shows it
+      # came from zizmor's release workflow at that tag. With the job's
+      # token (read-only) it also runs its online audits, such as an action
+      # pinned to a commit that is not in the action's repository, or a
+      # known-vulnerable action. The findings that are by design are in
+      # .github/zizmor.yml and inline.
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dir="${RUNNER_TEMP}/zizmor"
+          tarball="${dir}/zizmor-x86_64-unknown-linux-gnu.tar.gz"
+          mkdir -p "$dir"
+          curl -fsSL --retry 5 --retry-all-errors -o "$tarball" \
+            "https://github.com/zizmorcore/zizmor/releases/download/${ZIZMOR_VERSION}/${tarball##*/}"
+          # GitHub's attestation API fails with a 503 at times.
+          for attempt in 1 2 3; do
+            gh attestation verify "$tarball" --repo zizmorcore/zizmor \
+              --signer-workflow zizmorcore/zizmor/.github/workflows/release-binaries.yml \
+              --source-ref "refs/tags/${ZIZMOR_VERSION}" --deny-self-hosted-runners && break
+            [ "$attempt" = 3 ] && exit 1
+            sleep 10
+          done
+          tar -xzf "$tarball" -C "$dir"
+          "${dir}/zizmor" --no-progress --format=github .github/
 
       # Every script's syntax and how the features fit together (pkg.yml,
       # requires, no file shipped twice; the image build checks the same).
@@ -209,6 +264,62 @@ jobs:
         # (self-hosted) config. Without, it finds renovate.json and checks it
         # as the repository config it is.
         run: npx --yes --package "renovate@${RENOVATE_VERSION}" -- renovate-config-validator --strict
+
+  # The development tool pins (devtools/tools.txt, extensions.txt) against
+  # what upstream signs or attests at that version, beyond the sha256
+  # install.sh checks (devtools/verify-pins.sh has what and why). No secrets:
+  # the token only reads public releases and attestations.
+  pins:
+    name: pins
+    needs: changes
+    if: needs.changes.outputs.pins == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      # renovate: datasource=go depName=aead.dev/minisign
+      MINISIGN_VERSION: "v0.3.0"
+      # renovate: datasource=go depName=github.com/slsa-framework/slsa-verifier/v2
+      SLSA_VERIFIER_VERSION: "v2.7.1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The verifiers come pinned and checked as well. gh and Go are the base
+      # branch's pins (install.sh, sha256), which this job checked when they
+      # were merged: a pull request that bumps gh or Go is checked with the
+      # ones it replaces, not by themselves.
+      - name: Checkout the base branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+
+      # cosign-installer checks the release it installs.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
+
+      # minisign and slsa-verifier built from their modules with that Go,
+      # which checks them against sum.golang.org.
+      - name: Install gh, Go, minisign and slsa-verifier
+        run: |
+          set -euo pipefail
+          prefix="${RUNNER_TEMP}/verifiers"
+          base/devtools/install.sh "$prefix" gh go
+          export GOTOOLCHAIN=local GOFLAGS=-modcacherw GOPATH="${RUNNER_TEMP}/gopath" GOBIN="${prefix}/bin"
+          "${prefix}/go/bin/go" install "aead.dev/minisign/cmd/minisign@${MINISIGN_VERSION}"
+          "${prefix}/go/bin/go" install "github.com/slsa-framework/slsa-verifier/v2/cli/slsa-verifier@${SLSA_VERIFIER_VERSION}"
+
+      - name: Check the pins
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: PATH="${RUNNER_TEMP}/verifiers/bin:${PATH}" devtools/verify-pins.sh
 
   # No secrets on purpose, not even for Renovate's same-repository PRs: a PR
   # build pushes and signs nothing, so it uses a throwaway Secure Boot key,
@@ -251,14 +362,16 @@ jobs:
 
   # The publishing half of build.yml and release.yml, which a pull request
   # never reaches (nothing is pushed or signed there): the same registry
-  # login, cosign-installer and cosign release, the same push, sign and
-  # verify flags, and release.yml's digest-preserving promotion, rehearsed
-  # on a stand-in image against a throwaway registry on the runner. So a
-  # Renovate bump of any of these tools is tested before it merges, not by
-  # the next push to main or the Monday release. Cheap, so on every PR.
+  # login, cosign-installer and cosign release, the same push flags
+  # (.github/actions/publish), sign and verify flags (.github/actions/sign),
+  # and release.yml's digest-preserving promotion, rehearsed on a stand-in
+  # image against a throwaway registry on the runner. So a Renovate bump of
+  # any of these tools is tested before it merges, not by the next push to
+  # main or the Monday release. Cheap, so on every PR.
   #
-  # When changing a pin here, change it in build.yml and release.yml too
-  # (Renovate updates all of them in the same PR).
+  # When changing a pin or a flag here, change it in .github/actions/publish
+  # or .github/actions/sign (and the login in build.yml and release.yml)
+  # too; Renovate updates all of them in the same PR.
   signing:
     needs: changes
     runs-on: ubuntu-26.04
@@ -335,7 +448,7 @@ jobs:
 
   # The live image and the install ISO, as release.yml builds them (`just
   # iso`), whenever something they are made of changes. Nothing is pushed or
-  # published. The first place the rootless Flatpak install of the live stage
+  # published. The first place the rootless Flatpak install of the live image
   # runs before a release.
   iso:
     needs: changes
@@ -354,13 +467,13 @@ jobs:
         uses: ./.github/actions/prepare-runner
         with:
           need: "35"
-          pull-from: Containerfile
+          pull-from: installer/live.Containerfile
           pull: quay.io/fedora/fedora:latest
 
       - name: Install just
-        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        uses: ./.github/actions/install-tools
         with:
-          just-version: "1.58.0"
+          tools: just
 
       - name: Build the ISO
         run: |
@@ -389,7 +502,7 @@ jobs:
           podman images --format '{{.Repository}}:{{.Tag}} {{.Size}}' || true
 
   ci-ok:
-    needs: [changes, lint, image, dotfiles, devcontainer, flatpak, signing, iso]
+    needs: [changes, lint, pins, image, dotfiles, devcontainer, flatpak, signing, iso]
     if: always()
     runs-on: ubuntu-26.04
     timeout-minutes: 5

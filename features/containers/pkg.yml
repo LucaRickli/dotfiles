@@ -1,6 +1,6 @@
 packages:
   # Docker: Fedora packages the upstream engine as moby-engine. podman comes
-  # with the container-management group (Containerfile).
+  # with the container-management group (image/base.Containerfile).
   - moby-engine
   - docker-cli
   - docker-compose

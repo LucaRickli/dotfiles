@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 #
-# Build and sign the sealed UKI. Runs in the `uki` tools stage of the
-# Containerfile with the split rootfs bind-mounted read-only at /target and the
-# kernel + initramfs (moved out by `bootc container split-kernel-and-rootfs`)
-# at $KERNEL_DIR/<kver>/, which the Containerfile points at the copy on the
-# host so that this stage does not depend on the rootfs stages. Defaults to
-# /kernel for a direct run.
+# Build and sign the sealed UKI. Runs in the `uki` tools stage of
+# image/seal.Containerfile with the rechunked rootfs bind-mounted read-only at
+# /target and the kernel + initramfs (moved out by `bootc container
+# split-kernel-and-rootfs` in the `split` stage, mounted from that image) at
+# $KERNEL_DIR/<kver>/, /kernel by default.
 #
 # `bootc container ukify` computes the composefs digest of /target, reads the
 # kernel arguments from /target/usr/lib/bootc/kargs.d, and hands everything to

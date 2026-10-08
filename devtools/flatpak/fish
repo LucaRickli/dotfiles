@@ -1,10 +1,24 @@
 #!/bin/sh
 # /app/bin/fish, the terminal's shell: fish (/app/libexec/fish) with your
-# dotfiles. flatpak points XDG_CONFIG_HOME at this app's own directory, so the
-# fish directory there is made a link to ~/.config/fish (once, if you have one).
+# dotfiles. flatpak points XDG_CONFIG_HOME at this app's own directory and
+# shows ~/.config/fish read-only (devtools/flatpak/build.sh), so the fish
+# directory there links to what is in yours, entry by entry: fish_variables
+# (`set -U`) stays the app's own, and writable. A link to the whole
+# directory, which this made before, is replaced.
 config=$XDG_CONFIG_HOME/fish
-if [ ! -e "$config" ] && [ ! -L "$config" ] && [ -d "$HOME/.config/fish" ]; then
-    mkdir -p "$XDG_CONFIG_HOME"
-    ln -s "$HOME/.config/fish" "$config"
+if [ -L "$config" ] && [ "$(readlink "$config")" = "$HOME/.config/fish" ]; then
+    rm "$config"
+fi
+mkdir -p "$config"
+for entry in config.fish conf.d functions completions themes; do
+    if [ -e "$HOME/.config/fish/$entry" ] && [ ! -e "$config/$entry" ] && [ ! -L "$config/$entry" ]; then
+        ln -s "$HOME/.config/fish/$entry" "$config/$entry"
+    fi
+done
+
+# The launcher's TMPDIR (devtools/flatpak/code), also for `flatpak run
+# --command=fish`. Not in claude-sandboxed's box, which has no such dir.
+if [ -d "$XDG_RUNTIME_DIR/app/$FLATPAK_ID" ]; then
+    export TMPDIR="$XDG_RUNTIME_DIR/app/$FLATPAK_ID"
 fi
 exec /app/libexec/fish "$@"

@@ -24,7 +24,8 @@ def advisory_uri:
 
 # scan.sh's TSV columns:
 #   secrets: path, rule, severity, title, line
-#   vulns:   class, path, id, severity, status, package, installed, fixed
+#   vulns:   class, path, id, severity, status, package, installed, fixed,
+#            "malicious" (CWE-506) or empty
 ( [ $secrets | rows[] | {
       rule: "secret/\(.[1])",
       title: .[3],
@@ -36,16 +37,21 @@ def advisory_uri:
       help: null,
       key: "\(.[0])|\(.[4])"
   } ]
+# Known-malicious code (CWE-506) in any class, as an error; otherwise the
+# image's own files only.
 + [ $vulns | rows[]
-    | select(.[0] == "image" and (.[3] == "CRITICAL" or .[3] == "HIGH")) | {
+    | select(.[8] == "malicious" or (.[0] == "image" and (.[3] == "CRITICAL" or .[3] == "HIGH"))) | {
       rule: .[2],
-      title: .[2],
-      severity: (.[3] | score),
-      level: (if .[3] == "CRITICAL" and .[4] == "fixed" then "error" else "warning" end),
+      title: (if .[8] == "malicious" then "\(.[2]): known-malicious code" else .[2] end),
+      severity: (if .[8] == "malicious" then "9.5" else (.[3] | score) end),
+      level: (if .[8] == "malicious" or (.[3] == "CRITICAL" and .[4] == "fixed") then "error" else "warning" end),
       uri: .[1],
       line: 1,
-      text: ("\(.[2]) (\(.[3])) in \(.[5]) \(.[6]), /\(.[1]). "
-             + (if .[7] != "" then "Fixed in \(.[7])." else "No fixed version yet." end)),
+      text: (if .[8] == "malicious"
+             then "\(.[2]): \(.[5]) \(.[6]) at /\(.[1]) is a release known to carry malicious code (CWE-506). Replace it, whoever built it."
+             else "\(.[2]) (\(.[3])) in \(.[5]) \(.[6]), /\(.[1]). "
+                  + (if .[7] != "" then "Fixed in \(.[7])." else "No fixed version yet." end)
+             end),
       help: (.[2] | advisory_uri),
       key: "\(.[1])|\(.[5])"
   } ]

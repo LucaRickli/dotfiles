@@ -1,0 +1,47 @@
+#!/bin/sh
+# /usr/local/bin/podman, docker, qemu-img, qemu-system-x86_64 and bcvk in the
+# dev container: links to this file (devtools/Containerfile). The image has
+# none of them; in a toolbox, which shares the session bus, $HOME and /tmp
+# with the host, host-spawn runs the host's, through flatpak's session helper
+# as in the VS Code Flatpak. One installed in the container (dnf install
+# podman, for nested containers) is found on PATH and wins.
+name=${0##*/}
+
+# bcvk has podman bind-mount its own executable into each VM's container,
+# so podman must see it at the path it runs from. In a toolbox it runs on the
+# host, from a copy under $HOME (the same path there); that also keeps
+# --log-dir working, whose file descriptors host-spawn would not pass on to
+# a podman. Anywhere else it runs in here, with the podman this file or the
+# container provides; --version and --help work either way. Always the
+# image's own (tools.txt), never another version installed beside it.
+if [ "$name" = bcvk ]; then
+    bin=/usr/local/libexec/bcvk
+    if [ -e /run/.toolboxenv ]; then
+        copy=$HOME/.cache/devcontainer/bcvk
+        if ! cmp -s "$bin" "$copy"; then
+            mkdir -p "${copy%/*}" && cp "$bin" "$copy.$$" && mv -f "$copy.$$" "$copy" || exit
+        fi
+        exec host-spawn "$copy" "$@"
+    fi
+    exec "$bin" "$@"
+fi
+
+# This file can be on PATH under several spellings (/usr/local/sbin is a
+# link to bin, and both are on sudo's PATH and on many hosts'), so each
+# candidate is compared with it by file, not by name: running itself would
+# loop.
+IFS=:
+for dir in $PATH; do
+    if [ -x "$dir/$name" ] && ! [ "$dir/$name" -ef "$0" ]; then exec "$dir/$name" "$@"; fi
+done
+unset IFS
+
+# Where host-spawn looks for the bus. Without one (a Dev Container), say so
+# rather than leave it to a D-Bus error.
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ ! -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bus" ]; then
+    echo "$name: not in this container. It runs the host's through host-spawn," \
+        "which needs the host's session bus: a toolbox has it, a Dev Container" \
+        "only with \$XDG_RUNTIME_DIR/bus mounted. Or install $name in here." >&2
+    exit 127
+fi
+exec host-spawn "$name" "$@"

@@ -36,7 +36,7 @@ mksquashfs "$ROOTFS" "$WORK"/iso-root/LiveOS/squashfs.img \
 cp -v "$ROOTFS"/usr/lib/modules/*/initramfs.img "$WORK"/iso-root/images/pxeboot/initrd.img
 cp -v "$ROOTFS"/usr/lib/modules/*/vmlinuz       "$WORK"/iso-root/images/pxeboot/vmlinuz
 
-# The EFI tree the live stage assembled: GRUB only, no shim, so this ISO does
+# The EFI tree prepare-live.sh assembled: GRUB only, no shim, so this ISO does
 # not boot with Secure Boot enabled. That is deliberate, see
 # installer/prepare-live.sh.
 cp -aT "$ROOTFS"/boot/efi/EFI "$WORK"/EFI

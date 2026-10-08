@@ -1,12 +1,16 @@
 # Build the VS Code Flatpak (devtools/flatpak/) and push it to
 # ghcr.io/<owner>/code as an OCI image, :latest and :<yyyymmdd>, for a Flatpak
-# remote kept elsewhere to point at. Nothing here installs it anywhere; `just
-# flatpak-install` tries a local build. No schedule: every new image is a full
-# download for every machine that follows it (~750 MB, no deltas), so it is
-# only rebuilt when something in it changes, which Renovate's weekly PR
-# usually does. Pull requests get it through ci.yml, the PR gate, and only
-# build and test; the Justfile recipe, devtools/test.sh and the secret scan
-# rules (.github/actions/scan-image) are tested there too, but a push of only
+# remote kept elsewhere to point at. Signed with the cosign key, which `cosign
+# verify --key keys/cosign.pub` checks; flatpak itself does not (it checks
+# only GPG signatures that a remote's xa.signature-lookaside points at, not
+# policy.json or cosign's), so the OS's policy.json has no entry for it.
+# Nothing here installs it anywhere; `just flatpak-install` tries a local
+# build. No schedule: every new image is a full download for every machine
+# that follows it (about 950 MB, no deltas), so it is only rebuilt when
+# something in it changes, which Renovate's weekly PR usually does. Pull
+# requests get it through ci.yml, the PR gate, and only build and test; the
+# Justfile recipe, devtools/test.sh and the secret scan rules
+# (.github/actions/scan-image) are tested there too, but a push of only
 # those pushes nothing.
 name: flatpak
 
@@ -15,6 +19,10 @@ on:
     branches: [main]
     paths:
       - "devtools/flatpak/**"
+      - "devtools/claude-code.sh"
+      - "devtools/claude-code.asc"
+      - "devtools/mise-system.sh"
+      - "devtools/mise-config.toml"
       - "devtools/tools.txt"
       - "devtools/extensions.txt"
       - "devtools/install.sh"
@@ -22,9 +30,12 @@ on:
   workflow_dispatch:
   workflow_call:
 
+# Only pull requests supersede each other. Any other run waits for the one
+# before it, which, cancelled between its push and `sign`, would leave the
+# tags on an unsigned image.
 concurrency:
   group: flatpak-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
@@ -53,9 +64,9 @@ jobs:
           pull: quay.io/fedora/fedora:latest
 
       - name: Install just
-        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        uses: ./.github/actions/install-tools
         with:
-          just-version: "1.58.0"
+          tools: just
 
       # Builds, installs the result the way a machine does (VS Code comes from
       # Microsoft right there) and runs devtools/test.sh inside it.
@@ -81,3 +92,48 @@ jobs:
             oci:output/flatpak/oci "docker://${image}:latest"
           skopeo copy --retry-times 3 oci:output/flatpak/oci "docker://${image}:$(date -u +%Y%m%d)"
           echo "Pushed \`${image}@$(cat "${RUNNER_TEMP}/digest")\`" >> "$GITHUB_STEP_SUMMARY"
+          # For `sign`: one digest, as both copies are the same manifest.
+          mkdir -p "${RUNNER_TEMP}/pushed"
+          echo "${image}@$(cat "${RUNNER_TEMP}/digest")" > "${RUNNER_TEMP}/pushed/code"
+
+      - name: Record the digest
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pushed-code
+          path: ${{ runner.temp }}/pushed/code
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+
+  # The cosign key in a job of its own that runs nothing but checkout, the
+  # artifact download and cosign, as build.yml's `sign` (.github/actions/sign
+  # has the why).
+  sign:
+    name: sign
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    environment: release   # the cosign key
+    permissions:
+      contents: read    # keys/cosign.pub
+      packages: write   # the signature
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: The pushed digest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: pushed-code
+          path: ${{ runner.temp }}/pushed
+
+      - name: Sign and verify
+        uses: ./.github/actions/sign
+        with:
+          refs-dir: ${{ runner.temp }}/pushed
+          cosign-key: ${{ secrets.SIGNING_SECRET }}
+          registry-token: ${{ github.token }}
