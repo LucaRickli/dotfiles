@@ -28,7 +28,7 @@ kubectl v1.37.1 https://dl.k8s.io/release/{v}/bin/linux/amd64/kubectl .sha256 ku
 # renovate: datasource=github-releases depName=int128/kubelogin
 kubelogin v1.36.4 https://github.com/int128/kubelogin/releases/download/{v}/kubelogin_linux_amd64.zip .sha256 kubelogin:kubectl-oidc_login
 # renovate: datasource=github-releases depName=skyhook-io/radar
-kubectl-radar v1.15.0 https://github.com/skyhook-io/radar/releases/download/{v}/radar_{v}_linux_amd64.tar.gz https://github.com/skyhook-io/radar/releases/download/{v}/checksums.txt kubectl-radar
+kubectl-radar v1.16.0 https://github.com/skyhook-io/radar/releases/download/{v}/radar_{v}_linux_amd64.tar.gz https://github.com/skyhook-io/radar/releases/download/{v}/checksums.txt kubectl-radar
 # renovate: datasource=github-releases depName=helm/helm
 helm v4.3.0 https://get.helm.sh/helm-{v}-linux-amd64.tar.gz .sha256sum linux-amd64/helm
 # renovate: datasource=github-releases depName=helmfile/helmfile
