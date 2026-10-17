@@ -42,7 +42,7 @@ talhelper v3.1.17 https://github.com/budimanjojo/talhelper/releases/download/{v}
 # renovate: datasource=github-releases depName=google/go-containerregistry
 go-containerregistry v0.22.1 https://github.com/google/go-containerregistry/releases/download/{v}/go-containerregistry_Linux_x86_64.tar.gz https://github.com/google/go-containerregistry/releases/download/{v}/checksums.txt crane,gcrane,krane
 # renovate: datasource=github-releases depName=aquasecurity/trivy
-trivy v0.75.0 https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_Linux-64bit.tar.gz https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_checksums.txt trivy
+trivy v0.76.0 https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_Linux-64bit.tar.gz https://github.com/aquasecurity/trivy/releases/download/{v}/trivy_{n}_checksums.txt trivy
 # renovate: datasource=github-releases depName=pete911/certinfo
 certinfo v1.0.40 https://github.com/pete911/certinfo/releases/download/{v}/certinfo_{n}_linux_amd64.tar.gz https://github.com/pete911/certinfo/releases/download/{v}/checksums.txt certinfo
 # renovate: datasource=github-releases depName=getsops/sops
