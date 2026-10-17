@@ -53,7 +53,7 @@ sops v3.13.3 https://github.com/getsops/sops/releases/download/{v}/sops-{v}.linu
 # renovate: datasource=golang-version depName=golang
 go 1.27.2 https://dl.google.com/go/go{v}.linux-amd64.tar.gz .sha256 go/:go/
 # renovate: datasource=go depName=golang.org/x/tools/gopls
-gopls v0.23.0 go:golang.org/x/tools/gopls - gopls
+gopls v0.24.0 go:golang.org/x/tools/gopls - gopls
 # renovate: datasource=go depName=github.com/go-delve/delve
 dlv v1.27.2 go:github.com/go-delve/delve/cmd/dlv - dlv
 # renovate: datasource=github-releases depName=dominikh/go-tools
@@ -70,7 +70,7 @@ age v1.3.2 go:filippo.io/age/cmd/... - age,age-keygen,age-inspect,age-plugin-bat
 # renovate: datasource=github-release-attachments depName=protocolbuffers/protobuf
 protoc v36.2 https://github.com/protocolbuffers/protobuf/releases/download/{v}/protoc-{n}-linux-x86_64.zip sha256:121f6c7afe1d4d0e3ea6aab9432038599250134cbf4474cb1167d2c7decd4278 bin/protoc,include/:include/
 # renovate: datasource=github-releases depName=bufbuild/buf
-buf v1.73.0 https://github.com/bufbuild/buf/releases/download/{v}/buf-Linux-x86_64 https://github.com/bufbuild/buf/releases/download/{v}/sha256.txt buf-Linux-x86_64:buf
+buf v1.74.0 https://github.com/bufbuild/buf/releases/download/{v}/buf-Linux-x86_64 https://github.com/bufbuild/buf/releases/download/{v}/sha256.txt buf-Linux-x86_64:buf
 # renovate: datasource=go depName=google.golang.org/protobuf
 protoc-gen-go v1.36.12 go:google.golang.org/protobuf/cmd/protoc-gen-go - protoc-gen-go
 # renovate: datasource=go depName=google.golang.org/grpc/cmd/protoc-gen-go-grpc
