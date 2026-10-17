@@ -189,7 +189,7 @@ RUN mkdir /kernel && bootc container split-kernel-and-rootfs --rootfs / --output
 # `--volume "$PWD":/run/src` that Justfile/CI pass, and `FROM oci:out` reads it
 # back. podman cannot see that dependency, so the build runs as two
 # invocations split right here; see the Justfile's `_build`.
-FROM quay.io/coreos/chunkah:latest@sha256:8b56578258d1d10d3e1c7b0f71a4d05317c5fde331c4f483576a1b60e65f0cea AS chunkah
+FROM quay.io/coreos/chunkah:latest@sha256:71e593421c5de7dcc7c8c5c50e98d3bac572055a76f399f61a491d123c20a523 AS chunkah
 RUN --mount=from=split,src=/,target=/chunkah,ro \
     --mount=type=bind,target=/run/src,rw \
     chunkah build \
