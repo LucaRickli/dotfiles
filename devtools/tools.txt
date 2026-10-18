@@ -30,7 +30,7 @@ kubelogin v1.36.4 https://github.com/int128/kubelogin/releases/download/{v}/kube
 # renovate: datasource=github-releases depName=skyhook-io/radar
 kubectl-radar v1.16.0 https://github.com/skyhook-io/radar/releases/download/{v}/radar_{v}_linux_amd64.tar.gz https://github.com/skyhook-io/radar/releases/download/{v}/checksums.txt kubectl-radar
 # renovate: datasource=github-releases depName=helm/helm
-helm v4.3.0 https://get.helm.sh/helm-{v}-linux-amd64.tar.gz .sha256sum linux-amd64/helm
+helm v4.3.1 https://get.helm.sh/helm-{v}-linux-amd64.tar.gz .sha256sum linux-amd64/helm
 # renovate: datasource=github-releases depName=helmfile/helmfile
 helmfile v1.8.1 https://github.com/helmfile/helmfile/releases/download/{v}/helmfile_{n}_linux_amd64.tar.gz https://github.com/helmfile/helmfile/releases/download/{v}/helmfile_{n}_checksums.txt helmfile
 # renovate: datasource=github-releases depName=fluxcd/flux2
@@ -95,7 +95,7 @@ ripgrep 15.2.0 https://github.com/BurntSushi/ripgrep/releases/download/{v}/ripgr
 # renovate: datasource=github-release-attachments depName=sharkdp/fd
 fd v10.5.0 https://github.com/sharkdp/fd/releases/download/{v}/fd-{v}-x86_64-unknown-linux-musl.tar.gz sha256:761c72dc8e120d85b22292063be8a796e2eeb20eb3e4f38b8fa2343ccf3514a7 fd-{v}-x86_64-unknown-linux-musl/fd
 # renovate: datasource=github-releases depName=casey/just
-just 1.58.0 https://github.com/casey/just/releases/download/{v}/just-{v}-x86_64-unknown-linux-musl.tar.gz https://github.com/casey/just/releases/download/{v}/SHA256SUMS just
+just 1.59.0 https://github.com/casey/just/releases/download/{v}/just-{v}-x86_64-unknown-linux-musl.tar.gz https://github.com/casey/just/releases/download/{v}/SHA256SUMS just
 # renovate: datasource=github-releases depName=cli/cli
 gh v2.102.0 https://github.com/cli/cli/releases/download/{v}/gh_{n}_linux_amd64.tar.gz https://github.com/cli/cli/releases/download/{v}/gh_{n}_checksums.txt gh_{n}_linux_amd64/bin/gh
 # renovate: datasource=github-release-attachments depName=koalaman/shellcheck
