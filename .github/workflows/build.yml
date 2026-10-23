@@ -77,6 +77,11 @@ on:
       - ".github/workflows/ci.yml"
       - ".github/workflows/notify.yml"
       - ".github/workflows/release.yml"
+      - ".github/workflows/security.yml"
+      - ".github/workflows/alerts.yml"
+      - ".github/actions/scan-image/assign-alerts.sh"
+      - ".github/actions/scan-image/watch.sh"
+      - ".github/actions/scan-image/security-issue.sh"
       - ".github/rulesets/**"
       - ".github/actionlint.yaml"
       - ".github/zizmor.yml"
@@ -84,6 +89,15 @@ on:
   # Called by release.yml and by ci.yml (pull requests). The outputs come
   # from `plan`, a single job, so they are not last-matrix-job-wins.
   workflow_call:
+    inputs:
+      # From release.yml, when security.yml started the release: the
+      # Fedora security updates every image must contain
+      # (.github/actions/scan-image).
+      security:
+        description: "Fedora security updates the images must contain (ADVISORY SEVERITY PACKAGES; ...)"
+        required: false
+        type: string
+        default: ""
     # The two keys, passed by name from release.yml (an environment secret
     # resolves in the job that declares the environment, here). ci.yml
     # passes none: a pull request pushes and signs nothing.
@@ -220,6 +234,7 @@ jobs:
         with:
           image: localhost/${{ env.IMAGE_NAME }}:latest
           name: latest
+          require: ${{ inputs.security }}
 
       - name: Login to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -394,12 +409,14 @@ jobs:
         with:
           image: localhost/${{ env.IMAGE_NAME }}:${{ matrix.name }}
           name: ${{ matrix.name }}
+          require: ${{ inputs.security }}
 
       - name: Scan the sealed image
         uses: ./.github/actions/scan-image
         with:
           image: localhost/${{ env.IMAGE_NAME }}:${{ matrix.name }}-uki
           name: ${{ matrix.name }}-uki
+          require: ${{ inputs.security }}
 
       - name: Login to GHCR
         if: github.event_name != 'pull_request'

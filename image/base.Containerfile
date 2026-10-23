@@ -59,7 +59,14 @@ COPY image/bootloader.sh /image/
 # the image, so it links against the libraries the image ships and a base
 # update rebuilds it; a stage of its own, so no toolchain reaches the image.
 # Adding or changing a build needs no edit here.
+#
+# Fedora's updates first, as the OS below applies them, so the builds link
+# against the libraries the image ships. A dnf run of its own, minutes from
+# the OS's in the same build: an update that lands in between is the rare
+# case where the two differ, accepted, since the package step installs the
+# built RPMs with dnf, which brings in any newer library they require.
 FROM base AS builds
+RUN dnf -y upgrade && dnf -y clean all
 RUN --mount=type=bind,from=ctx-builds,source=/,target=/ctx /ctx/image/builds.sh
 
 # The built RPMs alone, for the package step: COPY hashes content, so a build
@@ -81,8 +88,30 @@ FROM base AS os
 # exist at build time (on a booted system systemd creates it under /var).
 RUN mkdir -p /var/roothome
 
-# The comps groups the image is composed from. Its own step, so that a change
-# to a feature's packages does not rebuild these GBs.
+# Fedora's updates, then the comps groups the image is composed from. Its
+# own step, so that a change to a feature's packages does not rebuild these
+# GBs.
+#
+# The updates come first because dnf installs nothing it finds installed
+# ("already installed", even for a name in a feature's pkg.yml), so a
+# package of the base image (python3, openssl, the kernel) would otherwise
+# stay at the version Fedora's daily rebuild of the base happened to carry,
+# at times days behind a security update. With them every build has every
+# stable Fedora update its dnf knows of, and it records which those are:
+# every security advisory, from the same metadata (-C, the cache this step
+# downloaded), for the packages installed by then. The scan before the push
+# fails on one the image lacks only if it is in that record, and warns on
+# one that reached Fedora's mirrors later
+# (.github/actions/scan-image/advisories.sh). Not in it: the packages the
+# features add (packages.sh, below); a fix one of those lacks only warns at
+# the push, and the rebuild security.yml starts for it requires it.
+# Before bootloader.sh, on purpose: with rpm-ostree still installed a kernel
+# update replaces the one kernel in /usr/lib/modules (the base sets
+# installonlypkgs to nothing, so only one is ever installed, which bootc
+# requires) and rebuilds its initramfs there; after bootloader.sh removes
+# rpm-ostree it would write a rescue kernel and initramfs into /boot. What
+# the kernel's and GRUB's scriptlets leave in /boot and /var/lib/rpm-state
+# is removed with the cache.
 #
 # workstation-product is the Fedora Workstation base set (firmware tools,
 # chrony, btrfs-progs, input methods, ...). Two of its defaults are excluded:
@@ -95,13 +124,17 @@ RUN mkdir -p /var/roothome
 # (https://fedoraproject.org/wiki/Changes/UnprivilegedUpdatesAtomicDesktops).
 # It shares the transaction because every dnf transaction rewrites the rpm
 # database, and a layer of its own would cost ~90 MB for that copy.
-RUN dnf -y group install \
+RUN dnf -y upgrade \
+    && dnf -y group install \
     --exclude=gnome-shell-extension-background-logo \
     --exclude=unoconv --exclude='libreoffice*' \
     base-graphical container-management core fonts guest-desktop-agents hardware-support multimedia networkmanager-submodules printing workstation-product \
     && dnf -y install fedora-release-ostree-desktop \
+    && install -d /usr/share/fedora-bootc \
+    && dnf -q -C advisory list --security --all --repo=updates --json \
+        > /usr/share/fedora-bootc/advisories-at-build.json \
     && dnf -y clean all \
-    && rm -f /var/log/dnf5.log*
+    && rm -rf /var/log/dnf5.log* /boot/symvers-* /boot/grub2 /boot/loader /var/lib/rpm-state/*
 
 # Every base feature's packages (features/*/pkg.yml, plus the RPMs the
 # builds made). The expensive layer: nothing below invalidates it.

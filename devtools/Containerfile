@@ -62,12 +62,21 @@ FROM registry.fedoraproject.org/fedora-toolbox:44
 ARG DEV_USER=dev
 ARG DEV_UID=59999
 
-# C toolchain (the linker for rustc, and cgo), openssl headers for
-# openssl-sys, the CLI tools tools.txt leaves to the distribution (the
-# Flatpak's Sdk has them too), and unzip for install.sh.
-RUN dnf -y --setopt=install_weak_deps=False install \
+# Fedora's updates first: fedora-toolbox is rebuilt by Fedora on its own
+# schedule and carries whatever was stable then, and dnf leaves a package it
+# finds installed at that version. Then the C toolchain (the linker for
+# rustc, and cgo), openssl headers for openssl-sys, the CLI tools tools.txt
+# leaves to the distribution (the Flatpak's Sdk has them too), and unzip for
+# install.sh. Last, from the same metadata (-C), the record of every
+# security advisory dnf knew for these packages, which the scan before the
+# push goes by, as for the OS (image/base.Containerfile).
+RUN dnf -y upgrade \
+    && dnf -y --setopt=install_weak_deps=False install \
         gcc gcc-c++ make pkgconf-pkg-config openssl-devel \
         jq git-lfs strace unzip \
+    && install -d /usr/share/fedora-bootc \
+    && dnf -q -C advisory list --security --all --repo=updates --json \
+        > /usr/share/fedora-bootc/advisories-at-build.json \
     && dnf clean all && rm -rf /var/cache/dnf /var/cache/libdnf5
 
 ENV LANG=C.UTF-8 \

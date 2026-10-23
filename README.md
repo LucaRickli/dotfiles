@@ -43,8 +43,11 @@ sudo bootc switch ghcr.io/lucarickli/fedora-bootc:latest-uki  # once, after inst
 | `latest`, `nvidia`                    | unsealed (kernel in place)                                                           |
 | `build-<sha>`, `build-<sha>-uki`, ... | one per build, for testing it                                                        |
 
-A release every Monday; machines also update themselves. Releases, updates,
-scanning and CI: [docs/architecture/updates.md](docs/architecture/updates.md).
+A release every Monday, and one within a day when the released images lack
+a critical Fedora security update; a machine takes it when you run
+`sudo bootc upgrade`, never by itself. Releases, updates, scanning and CI:
+[docs/architecture/updates.md](docs/architecture/updates.md); reporting a
+vulnerability: [SECURITY.md](SECURITY.md).
 Also: Secure Boot and TPM2
 ([docs/secureboot-tpm2.md](docs/secureboot-tpm2.md)), rescue
 ([docs/rescue.md](docs/rescue.md)), pulling through a cache

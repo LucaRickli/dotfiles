@@ -20,7 +20,7 @@ name: notify
 on:
   workflow_run: # zizmor: ignore[dangerous-triggers]
     # By `name:`. Only what runs unattended.
-    workflows: [build, check, devcontainer, flatpak, release, ci]
+    workflows: [build, check, devcontainer, flatpak, release, ci, security, alerts]
     types: [completed]
     branches: [main]
 

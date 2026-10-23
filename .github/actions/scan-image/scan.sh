@@ -21,9 +21,14 @@
 #     it is, RPM, upstream release or the image's own file, fixed or not
 #   - a CRITICAL vulnerability with a fixed version, in a file the image adds
 #     itself: not installed by an RPM, not part of an upstream release (below)
-#   - a Critical Fedora security update that the image does not contain yet
-#     (reported, not failed, on pull requests: that is Fedora's timing, and
-#     the push after the merge fails on it anyway)
+#   - a Critical Fedora security update the image lacks although its build's
+#     own dnf knew it (advisories.sh has the rule and why): dnf could not
+#     install it, or a later step replaced it. One that reached Fedora's
+#     mirrors after the build read them only warns: the next build has it,
+#     and security.yml releases a rebuild of the published images once it is
+#     due. In a rebuild security.yml started (REQUIRE, from its `security`
+#     input), also an update it was started for and does not contain.
+#     Reported, not failed, on pull requests, which push nothing.
 # Everything else goes into the step summary, and all of trivy's findings into
 # the log.
 #
@@ -140,18 +145,11 @@ awk -F'\t' -v OFS='\t' '
 ' "$work/upstream.txt" "$work/owners.tsv" "$work/vulns.tsv" > "$work/classified.tsv"
 
 # --- dnf: Fedora security updates the image does not contain -----------------
-# The updates repo only: it carries Fedora's advisories, and a third-party
-# repository being down must not fail the scan. One row per advisory and
-# package; retried like every other download here.
-for attempt in 1 2 3; do
-    if podman run --rm --pull=never --entrypoint /usr/bin/dnf "$image" \
-           -q advisory list --security --repo=updates --json > "$work/advisories.json"; then
-        break
-    fi
-    [ "$attempt" = 3 ] && { echo "could not read Fedora's advisories" >&2; exit 1; }
-    echo "dnf advisory list failed (attempt $attempt), retrying in 30s" >&2
-    sleep 30
-done
+# advisories.sh asks dnf inside the image and applies the push gate's rule:
+# the missing updates that fail the push, one per line with the reason, and
+# dnf's full list for the summary and the alerts.
+rule=$("$here/advisories.sh" --rule)
+JSON="$work/advisories.json" "$here/advisories.sh" "$image" > "$work/gated.txt"
 
 # --- Verdict and summary ------------------------------------------------------
 count() { awk -F'\t' "$1" "$2" | wc -l; }
@@ -164,17 +162,25 @@ n_upstream=$(count '$1 == "upstream"' "$work/classified.tsv")
 fedora() { jq -r --arg s "$1" '[.[] | select(.type == "security" and .severity == $s) | .name] | unique | length' "$work/advisories.json"; }
 n_fedora_crit=$(fedora Critical)
 n_fedora_imp=$(fedora Important)
-
 failures=()
 [ "$n_secrets" = 0 ] || failures+=("$n_secrets secret(s) in the image")
 [ "$n_malicious" = 0 ] || failures+=("$n_malicious file(s) from a release known to carry malicious code (CWE-506)")
 [ "$n_image_crit" = 0 ] || failures+=("$n_image_crit critical vulnerabilities with a fix in files the image adds itself")
-if [ "$n_fedora_crit" != 0 ]; then
+# ids WHY: the missing updates advisories.sh gives that reason, comma-separated
+ids() { awk -v why="$1" '$4 == why { print $1 }' "$work/gated.txt" | paste -sd,; }
+fedora_failures=()
+[ -z "$(ids seen)" ] || fedora_failures+=("Fedora security update(s) the build's own dnf knew and the image lacks: $(ids seen). dnf could not install them, or a later step replaced them: the build log says which")
+[ -z "$(ids unrecorded)" ] || fedora_failures+=("Fedora security update(s) ($rule) the image lacks: $(ids unrecorded). It has no record of what its build's dnf knew (/usr/share/fedora-bootc/advisories-at-build.json), so nothing says it could not have had them")
+[ -z "$(ids required)" ] || fedora_failures+=("Fedora security update(s) this rebuild was started for and does not contain: $(ids required). Its build's dnf did not have them yet (a mirror behind) or could not install them (the build log says); security.yml starts the rebuild again tomorrow")
+for f in "${fedora_failures[@]}"; do
     if [ "${EVENT:-}" = pull_request ]; then
-        echo "::warning::$n_fedora_crit Critical Fedora security update(s) are not in this image yet (fails the push after merging)"
+        echo "::warning::$f (fails a push)"
     else
-        failures+=("$n_fedora_crit Critical Fedora security update(s) not in the image yet; rebuild once its Fedora base image has them")
+        failures+=("$f")
     fi
+done
+if [ -n "$(ids newer)" ]; then
+    echo "::warning::Fedora security update(s) not in the image that reached Fedora's mirrors after its build read them: $(ids newer). The next build has them; security.yml releases a rebuild of the published images once they are due"
 fi
 
 {
@@ -185,7 +191,7 @@ fi
     echo "| Secrets | $n_secrets | any |"
     echo "| Known-malicious code (CWE-506), in any file | $n_malicious | any |"
     echo "| Vulnerabilities in files the image adds itself | $n_image_crit critical with a fix, $n_image_high high | critical with a fix |"
-    echo "| Fedora security updates not in the image yet | $n_fedora_crit critical, $n_fedora_imp important | critical |"
+    echo "| Fedora security updates not in the image | $n_fedora_crit critical, $n_fedora_imp important | $rule, or one a rebuild was started for |"
     echo "| trivy on RPM binaries (Fedora's advisories are what counts) | $n_rpm | malicious only |"
     echo "| trivy on upstream releases (dev tools, Flatpaks) | $n_upstream | malicious only |"
     if [ "$n_secrets" != 0 ]; then
@@ -214,22 +220,29 @@ fi
         awk -F'\t' '$1 == "image" && $4 == "CRITICAL" && $5 == "fixed" {
             printf "| /%s | %s | %s | %s | %s |\n", $2, $3, $6, $7, $8 }' "$work/classified.tsv"
     fi
-    if [ "$((n_fedora_crit + n_fedora_imp))" != 0 ]; then
+    if [ "$((n_fedora_crit + n_fedora_imp))" != 0 ] || [ -s "$work/gated.txt" ]; then
         echo
-        echo "**Fedora security updates not in the image yet**"
+        echo "**Fedora security updates not in the image**"
         echo
-        echo "| Advisory | Severity | Packages |"
-        echo "|---|---|---|"
-        jq -r 'map(select(.type == "security" and (.severity == "Critical" or .severity == "Important")))
-               | group_by(.name)[]
-               | "| \(.[0].name) | \(.[0].severity) | \(map(.nevra) | join(", ")) |"' "$work/advisories.json"
+        echo "| Advisory | Severity | Verdict | Packages |"
+        echo "|---|---|---|---|"
+        jq -r --rawfile gated "$work/gated.txt" '
+            ($gated | split("\n") | map(select(length > 0) | split(" ") | {(.[0]): .[3]}) | add // {}) as $why
+            | {seen: "fails: its build knew it", unrecorded: "fails: no record of the build",
+               required: "fails: the rebuild is for it", newer: "warns: newer than the build"} as $text
+            | (map(select(.type == "security" and (.severity == "Critical" or .severity == "Important")))
+               | group_by(.name) | map({name: .[0].name, severity: .[0].severity, packages: map(.nevra)}))
+              + ($gated | split("\n") | map(select(length > 0) | split(" ")
+                 | {name: .[0], severity: .[1], packages: (.[2] | split(","))}))
+            | unique_by(.name)[]
+            | "| \(.name) | \(.severity) | \($text[$why[.name] // ""] // "reported") | \(.packages | join(", ")) |"' "$work/advisories.json"
     fi
     echo
 } >> "$summary"
 
 if [ -n "${SARIF:-}" ]; then
     jq -n --rawfile secrets "$work/secrets.tsv" --rawfile vulns "$work/classified.tsv" \
-        --slurpfile adv "$work/advisories.json" \
+        --slurpfile adv "$work/advisories.json" --rawfile gated "$work/gated.txt" --arg rule "$rule" \
         --arg repo "${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-lucarickli/dotfiles}" \
         -f "$here/sarif.jq" > "$SARIF"
 fi

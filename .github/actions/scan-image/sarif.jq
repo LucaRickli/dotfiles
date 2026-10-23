@@ -5,7 +5,9 @@
 # summary and the log: as alerts it would bury these.
 #
 # Inputs (jq -n): $secrets and $vulns, scan.sh's TSV files; $adv, dnf's
-# advisory list (slurped); $repo, the repository URL.
+# advisory list (slurped); $gated, advisories.sh's lines (raw: ADVISORY
+# SEVERITY PACKAGES WHY), and $rule, advisories.sh --rule; $repo, the
+# repository URL.
 #
 # Paths are image paths, not files in this repository, so GitHub shows them
 # without source. The fingerprints are this scan's own, so an alert keeps its
@@ -55,17 +57,32 @@ def advisory_uri:
       help: (.[2] | advisory_uri),
       key: "\(.[1])|\(.[5])"
   } ]
-+ [ $adv[0]
-    | map(select(.type == "security" and (.severity == "Critical" or .severity == "Important")))
-    | group_by(.name)[] | {
-      rule: .[0].name,
-      title: "Fedora \(.[0].severity) security update",
-      severity: (if .[0].severity == "Critical" then "9.5" else "8.0" end),
-      level: (if .[0].severity == "Critical" then "error" else "warning" end),
+# The Fedora updates the image lacks: an error where the push fails on them
+# (advisories.sh's WHY), a warning otherwise. An update a rebuild was
+# started for may be one dnf does not list here (the scan read a mirror as
+# far behind as the build's), hence the second source.
++ [ ($gated | split("\n") | map(select(length > 0) | split(" ") | {(.[0]): .[3]}) | add // {}) as $why
+    | ($adv[0]
+       | map(select(.type == "security" and (.severity == "Critical" or .severity == "Important")))
+       | group_by(.name) | map({name: .[0].name, severity: .[0].severity, packages: map(.nevra)}))
+      + ($gated | split("\n") | map(select(length > 0) | split(" ")
+         | {name: .[0], severity: .[1], packages: (.[2] | split(","))}))
+    | unique_by(.name)[] | ($why[.name] // "") as $w | {
+      rule: .name,
+      title: "Fedora \(.severity) security update",
+      severity: (if .severity == "Critical" then "9.5" else "8.0" end),
+      level: (if $w == "seen" or $w == "unrecorded" or $w == "required" then "error" else "warning" end),
       uri: "usr/lib/sysimage/rpm",
       line: 1,
-      text: "Fedora's \(.[0].severity) security update \(.[0].name) is not in the image yet: \(map(.nevra) | join(", ")). A rebuild picks it up once the image's Fedora base has it.",
-      help: "https://bodhi.fedoraproject.org/updates/\(.[0].name)",
+      text: ("Fedora's \(.severity) security update \(.name) is not in the image: \(.packages | join(", ")). "
+             + {
+                 seen: "Its build's own dnf knew it, so dnf could not install it or a later step replaced it: the build log says which.",
+                 unrecorded: "The image has no record of what its build's dnf knew (/usr/share/fedora-bootc/advisories-at-build.json), so nothing says it could not have had it.",
+                 required: "This rebuild was started for it (security.yml) and does not contain it: its build's dnf did not have it yet (a mirror behind) or could not install it (the build log says). security.yml starts the rebuild again tomorrow.",
+                 newer: "It reached Fedora's mirrors after the build read them, so the next build has it. It does not fail the push (\($rule), .github/actions/scan-image/advisories.sh); security.yml releases a rebuild of the published images once it is due.",
+                 "": "It does not fail the push, which takes \($rule) (.github/actions/scan-image/advisories.sh)."
+               }[$w]),
+      help: "https://bodhi.fedoraproject.org/updates/\(.name)",
       key: "rpm"
   } ]
 ) as $findings

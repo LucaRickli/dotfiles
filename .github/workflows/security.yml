@@ -1,0 +1,82 @@
+# Daily, the published images (every sealed OS image, live, the dev
+# container) are checked for Fedora security updates they lack: Critical,
+# and stable in Bodhi for 12 hours, so a build started now has them
+# (.github/actions/scan-image/advisories.sh --due). For an OS image it
+# starts release.yml without a version, which releases HEAD of main as this
+# week's next patch level, <yy>.<ww>.<n>; for the dev container,
+# devcontainer.yml. Either requires the updates in the scan of every image
+# it makes, and tells you in an issue when it is done (watch.sh has the
+# rest).
+#
+# 15:23 UTC: Fedora pushes its stable updates between about 00:00 and 03:00
+# UTC, so the ones from that night are due by now. GitHub runs a schedule
+# late at times, by hours, which only makes more of them due. An odd minute,
+# because GitHub delays or drops schedules on the hour.
+#
+# No secret and no environment here: a rebuild runs as a workflow run of
+# its own, with its own token and the `release` environment's keys (its ref
+# is main, which the environment allows). GitHub's failure email for a run
+# started this way goes to nobody, the actor being github-actions[bot]; the
+# rebuild's own `security` job and notify.yml cover those runs, and
+# notify.yml this one.
+name: security
+
+on:
+  schedule:
+    - cron: "23 15 * * *"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Check and report only: start nothing"
+        type: boolean
+        default: false
+
+# Nothing by default; the job asks for what it needs.
+permissions: {}
+
+concurrency:
+  group: security
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    permissions:
+      contents: read   # the checkout: `just images`, the scripts, keys/cosign.pub
+      actions: write   # starting release.yml and devcontainer.yml, reading their runs
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Room for the largest published image (about 9 GB on disk): each is
+      # removed once checked. Nothing is built here.
+      - name: Prepare the runner
+        uses: ./.github/actions/prepare-runner
+        with:
+          need: "20"
+
+      - name: Install just
+        uses: ./.github/actions/install-tools
+        with:
+          tools: just
+
+      # Every image is verified the way a machine verifies it before dnf
+      # runs in it.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
+
+      - name: Check the published images, rebuild what lacks a fix
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          set -euo pipefail
+          args=()
+          [ "$DRY_RUN" != true ] || args+=(--dry-run)
+          .github/actions/scan-image/watch.sh "${args[@]}"

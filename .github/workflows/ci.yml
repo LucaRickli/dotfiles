@@ -109,6 +109,10 @@ jobs:
               # used by every job that runs podman
               .github/actions/prepare-runner/*)
                 image=true; dotfiles=true; devcontainer=true; flatpak=true; iso=true ;;
+              # what security.yml, alerts.yml and the security jobs run:
+              # they scan nothing before a push
+              .github/actions/scan-image/assign-alerts.sh|.github/actions/scan-image/watch.sh|\
+              .github/actions/scan-image/security-issue.sh) ;;
               # scans every image before it is pushed; its rules also drive
               # the Flatpak's secret scan
               .github/actions/scan-image/*)
@@ -140,8 +144,11 @@ jobs:
               *.md|docs/*|home/*|dotfiles.sh|scripts/*|flatpaks.txt|devtools/*|installer/*|renovate.json|\
               .github/workflows/check.yml|.github/workflows/devcontainer.yml|\
               .github/workflows/flatpak.yml|.github/workflows/ci.yml|.github/workflows/notify.yml|\
-              .github/workflows/release.yml|.github/rulesets/*|.github/actionlint.yaml|.github/zizmor.yml|\
-              .github/actions/publish/*|.github/actions/sign/*) ;;
+              .github/workflows/release.yml|.github/workflows/security.yml|.github/workflows/alerts.yml|\
+              .github/rulesets/*|.github/actionlint.yaml|.github/zizmor.yml|\
+              .github/actions/publish/*|.github/actions/sign/*|\
+              .github/actions/scan-image/assign-alerts.sh|.github/actions/scan-image/watch.sh|\
+              .github/actions/scan-image/security-issue.sh) ;;
               *) image=true ;;
             esac
             case "$f" in

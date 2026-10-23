@@ -56,15 +56,17 @@ useful (below).
 **`builds`** runs every base feature's `build.sh`
 ([`image/builds.sh`](../../image/builds.sh)): what Fedora does not package,
 built from pinned upstream versions (noctalia-greeter as an RPM, shimmy as a
-binary). It starts from the same base as the image, so the results link
-against the libraries the image ships, and it is thrown away, so no
-toolchain reaches the image. A new build needs no change outside its
-feature's folder.
+binary). It starts from the same base as the image, with Fedora's updates
+applied like the image does, so the results link against the libraries the
+image ships, and it is thrown away, so no toolchain reaches the image. A new
+build needs no change outside its feature's folder.
 
 **`os`** is the whole OS, an ordinary bootc image with its kernel in place:
 
-1. The comps groups (Workstation's base set, without GNOME): gigabytes that
-   rarely change, in a layer of their own.
+1. Every stable Fedora update (`dnf upgrade`), then the comps groups
+   (Workstation's base set, without GNOME), then a record of the security
+   advisories that dnf knew, which the scan goes by: gigabytes that rarely
+   change, in a layer of their own.
 2. [`packages.sh`](../../image/packages.sh): each feature's `pre-install.sh`,
    then every package of every base feature in one dnf transaction (plus the
    RPMs the builds made), then each `post-install.sh`. The expensive layer.
@@ -82,9 +84,9 @@ driver, its kernel module built and signed against the image's kernel,
 open or closed modules by flavor.
 
 [`installer/live.Containerfile`](../../installer/live.Containerfile), the
-live ISO's system, starts from the plain Fedora base, not the OS: the
-installer pulls the real image from the registry
-([`installer/`](../../installer/)).
+live ISO's system, starts from the plain Fedora base, not the OS, with
+Fedora's updates applied the same way: the installer pulls the real image
+from the registry ([`installer/`](../../installer/)).
 
 ## Sealing
 
@@ -126,7 +128,7 @@ needs from scratch.
 | the Secure Boot certificate (a new key) | the steps that sign: `bootloader.sh`, an add-on's package step, the UKI |
 | `image/initramfs.sh` | each seal from its split step; the unsealed images stay as they are |
 | `image/uki.sh` | the UKI step alone |
-| the Fedora base (daily) | everything |
+| the Fedora base (daily; between its refreshes a local build keeps its cached updates step, CI has no cache) | everything |
 | docs, `home/`, CI files | nothing: `.containerignore` keeps them out |
 
 ## Keys

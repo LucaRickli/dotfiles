@@ -3,8 +3,10 @@
 # cosign key: on a machine running this OS, podman refuses it unsigned (its
 # policy.json), so toolbox and Dev Containers on podman do too; docker reads
 # no policy.json. Weekly as well, so the Fedora packages in it stay current
-# without a commit. Pull requests get it through ci.yml, the PR gate, and
-# only build, test and scan.
+# without a commit, and from security.yml the day the published one lacks a
+# Fedora security update that is due (its `security` input, which the scan
+# then requires; `security` below tells you). Pull requests get it through
+# ci.yml, the PR gate, and only build, test and scan.
 name: devcontainer
 
 on:
@@ -24,9 +26,19 @@ on:
       - "devtools/test.sh"
       - ".github/workflows/devcontainer.yml"
       - ".github/actions/**"
+      # what security.yml, alerts.yml and the security jobs run, not the
+      # scan before the push
+      - "!.github/actions/scan-image/assign-alerts.sh"
+      - "!.github/actions/scan-image/watch.sh"
+      - "!.github/actions/scan-image/security-issue.sh"
   schedule:
     - cron: "0 9 * * 1"
   workflow_dispatch:
+    inputs:
+      security:
+        description: "Fedora security updates this rebuild is for, as ADVISORY SEVERITY PACKAGES separated by ';' (security.yml sets it): the image must contain them, an issue tells you"
+        required: false
+        type: string
   workflow_call:
 
 # Only pull requests supersede each other. Any other run waits for the one
@@ -163,6 +175,7 @@ jobs:
           image: ${{ env.LOCAL }}
           name: devcontainer
           upstream-paths: usr/local/ var/home/dev/.vscode-server/
+          require: ${{ inputs.security }}
 
       - name: Login to GHCR
         if: github.event_name != 'pull_request'
@@ -228,3 +241,33 @@ jobs:
           refs-dir: ${{ runner.temp }}/pushed
           cosign-key: ${{ secrets.SIGNING_SECRET }}
           registry-token: ${{ github.token }}
+
+  # A rebuild security.yml started (its `security` input) tells you how it
+  # went, in an issue assigned to you: what it fixed and what to pull, or
+  # that it failed and what it left behind
+  # (.github/actions/scan-image/security-issue.sh). Whatever happened above,
+  # hence always().
+  security:
+    needs: [build, sign]
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.security != ''
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read   # the script
+      issues: write    # the issue
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Tell the owner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          WHAT: devcontainer
+          OUTCOME: ${{ needs.sign.result }}
+          SECURITY: ${{ inputs.security }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: .github/actions/scan-image/security-issue.sh

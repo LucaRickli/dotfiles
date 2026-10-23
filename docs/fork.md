@@ -39,6 +39,12 @@ To build and publish your own copy. Needs rootless `podman`, `just`, `yq`,
    from GitHub Actions before anything merges into `main`, so Renovate's
    automerge waits for the whole build ([updates.md](architecture/updates.md)), and lets
    repository admins bypass it, so you can still push to `main` directly.
+   Under Code security, turn on private vulnerability reporting, which
+   `SECURITY.md` points reporters at. The code scanning alerts and the
+   issues CI opens go to the repository owner; an organisation cannot be
+   assigned, so name a member as `ASSIGNEE` in `alerts.yml` and as `OWNER`
+   in `notify.yml` and the `security` jobs of `release.yml` and
+   `devcontainer.yml` then.
 5. After the first push, make the GHCR packages public. If a package already
    exists (pushed from another repository), grant this one access in the
    package settings (Manage Actions access: Write, or Admin so that CI can

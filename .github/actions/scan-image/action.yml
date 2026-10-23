@@ -10,7 +10,11 @@
 # What needs action also becomes code scanning alerts (Security tab), one
 # category per image, so an alert closes when a later build of that image no
 # longer has it. Not from pull requests: a fork's token cannot upload, and
-# the gate above already reports there.
+# the gate above already reports there. alerts.yml assigns the alerts to
+# you (assign-alerts.sh). security.yml checks the published images daily
+# for Fedora updates they lack (advisories.sh) and starts a rebuild and
+# release for them (watch.sh), whose scans then require those updates
+# (`require`), and which tells you how it went (security-issue.sh).
 #
 # trivy is the release devtools/tools.txt pins (Renovate bumps it with the
 # rest of the development tools), fetched and checked against upstream's
@@ -34,6 +38,12 @@ inputs:
       Path prefixes (no leading slash, whitespace-separated) holding pinned
       upstream releases, whose vulnerabilities are reported but never fail
       (scan.sh); known-malicious code fails there too
+    default: ""
+  require:
+    description: >-
+      Fedora security updates the image must contain, as the `security`
+      input of a rebuild security.yml started (ADVISORY SEVERITY PACKAGES,
+      one per line or separated by ";"); empty for any other build
     default: ""
 runs:
   using: composite
@@ -59,6 +69,7 @@ runs:
         IMAGE: ${{ inputs.image }}
         NAME: ${{ inputs.name }}
         UPSTREAM: ${{ inputs.upstream-paths }}
+        REQUIRE: ${{ inputs.require }}
         EVENT: ${{ github.event_name }}
       run: |
         set -euo pipefail

@@ -7,9 +7,14 @@
 # year paired with the ISO week; %y or %Y would be wrong here, because the last
 # days of December belong to week 1 of the following ISO year.
 #
-# Three ways in:
+# Four ways in:
 #   schedule           every Monday at 10:00 UTC, version 26.36
 #   workflow_dispatch  now, with a version you name or the next free one
+#   security.yml       the same dispatch, without a version and with the
+#                      Fedora security updates the published images lack as
+#                      `security`: every image's scan requires them, the
+#                      notes name them, and `security` below tells you how
+#                      it went
 #   release published  a release you created by hand gets its images and ISO
 #
 # The release is created with GITHUB_TOKEN, and a release created that way does
@@ -20,7 +25,8 @@
 # merged is in the Monday release. If a scheduled or manually dispatched
 # release fails, notify.yml opens an issue assigned to the repository owner; a
 # run for a release published by hand is reported by GitHub to whoever
-# published it.
+# published it. A release moves the tags machines follow and nothing else:
+# a machine takes it when its owner runs `bootc upgrade`.
 name: release
 
 on:
@@ -32,6 +38,10 @@ on:
     inputs:
       version:
         description: "Version to release (default: this week's, or its next patch level)"
+        required: false
+        type: string
+      security:
+        description: "Fedora security updates this release is for, as ADVISORY SEVERITY PACKAGES separated by ';' (security.yml sets it): every image must contain them, the notes name them, an issue tells you"
         required: false
         type: string
   release:
@@ -122,11 +132,15 @@ jobs:
   #
   # The two keys by name, nothing else: each resolves in the job of build.yml
   # that declares the `release` environment, which is where an environment
-  # secret of that name is read (GitHub's reusable-workflow rule).
+  # secret of that name is read (GitHub's reusable-workflow rule). The
+  # `security` input of a release security.yml started goes along: every
+  # image's scan requires those updates, so the release has them or fails.
   images:
     needs: plan
     if: needs.plan.outputs.release == 'true'
     uses: ./.github/workflows/build.yml
+    with:
+      security: ${{ inputs.security || '' }}
     secrets:
       SECUREBOOT_PRIVATE_KEY: ${{ secrets.SECUREBOOT_PRIVATE_KEY }}
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
@@ -203,6 +217,7 @@ jobs:
           image: ${{ env.IMAGE_NAME }}:live
           name: live
           upstream-paths: var/lib/flatpak/
+          require: ${{ inputs.security }}
 
       - name: Login to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -260,7 +275,9 @@ jobs:
       # commit this run was built from.
       #
       # The image list in the notes is the tags the promotion moves: from
-      # build.yml's list, each image and its -uki, then live.
+      # build.yml's list, each image and its -uki, then live. A release
+      # security.yml started says what for (its `security` input, the
+      # updates the published images lacked, each one a Bodhi update).
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -268,9 +285,17 @@ jobs:
           ASSETS: ${{ steps.assets.outputs.assets }}
           IMAGES: ${{ needs.images.outputs.images }}
           KEEP: ${{ needs.images.outputs.keep }}
+          SECURITY: ${{ inputs.security }}
         run: |
           set -euo pipefail
           registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          headline="Weekly build of the Fedora bootc image."
+          if [ -n "$SECURITY" ]; then
+            headline="Security release of the Fedora bootc image: the published images lacked"
+            headline+=" these Fedora security updates, which this build has (security.yml;"
+            headline+=" each at https://bodhi.fedoraproject.org/updates/):"$'\n\n'
+            headline+=$(printf '%s\n' "$SECURITY" | tr ';' '\n' | awk 'NF { print "    " $1, $2, $3 }')
+          fi
           names=$(jq -er '.[]' <<<"$IMAGES")   # fails on a missing or empty list
           tags=()
           for name in $names; do tags+=("$name" "${name}-uki"); done
@@ -287,7 +312,7 @@ jobs:
             printf '    %s/%s:%-*s    %s\n' "$registry" "$IMAGE_NAME" "$width" "$t" "$what"
           done)
           cat > NOTES.md << EOF
-          Weekly build of the Fedora bootc image.
+          ${headline}
 
           ### Images
 
@@ -297,7 +322,8 @@ jobs:
           ${list}
 
           These are the only tags that move, and this release is what they
-          point at. The install ISO deploys \`latest-uki\`. Until ${KEEP:?}
+          point at; a machine takes it when you run \`sudo bootc upgrade --apply\`.
+          The install ISO deploys \`latest-uki\`. Until ${KEEP:?}
           newer build images (about two builds) replace it, this build also has
           a tag of its own, for testing exactly this one:
 
@@ -440,3 +466,37 @@ jobs:
             done
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # A release security.yml started (its `security` input) tells you how it
+  # went, in an issue assigned to you: what it fixed and the command to run,
+  # since nothing on a machine moves by itself, or that it failed and what
+  # it left behind (.github/actions/scan-image/security-issue.sh). Here,
+  # where the outcome and the version are certain. Whatever happened above,
+  # hence always(); a release that never started (plan) has nothing to say.
+  security:
+    needs: [plan, images, iso, sign, promote]
+    if: >-
+      always() && github.event_name == 'workflow_dispatch' && inputs.security != '' &&
+      needs.plan.outputs.release == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read   # the script, the commits since the last release
+      issues: write    # the issue
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Tell the owner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          WHAT: release
+          OUTCOME: ${{ needs.promote.result }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          SECURITY: ${{ inputs.security }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: .github/actions/scan-image/security-issue.sh

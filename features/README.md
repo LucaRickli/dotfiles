@@ -56,6 +56,6 @@ its open modules support.
 | `ssh` | sshd policy and its banner |
 | `tailscale` | installed, not enabled |
 | `terminal` | fish, ghostty, fastfetch |
-| `updates` | the signature policy updates and the dev container are checked against |
+| `updates` | the signature policy updates and the dev container are checked against; the auto-update timer masked, so a machine updates only when you run `bootc upgrade` |
 | `virtualization` | QEMU/KVM, libvirt, Virtual Machine Manager |
 | `xrdp` | remote desktop on 3389 |
