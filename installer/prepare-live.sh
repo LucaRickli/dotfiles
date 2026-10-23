@@ -2,8 +2,8 @@
 #
 # Turn the plain Fedora bootc base into the live ISO rootfs: the graphical
 # session, the tools an install needs, and the ISO boot machinery. Runs from
-# the Containerfile's `live` stage; installer/configure-installer.sh then adds
-# the wizard on top.
+# installer/live.Containerfile; installer/configure-installer.sh then adds the
+# wizard on top.
 set -euxo pipefail
 # Session: labwc hosts the wizard, greetd autologs in, foot for the manual
 # install path, plus mesa, portals and fonts.
@@ -16,6 +16,15 @@ set -euxo pipefail
 # Boot: GRUB (gcdx64.efi) with NO shim, see "NO SHIM" below.
 # dracut-live for the squashfs root; livesys creates the autologin live user.
 # zram-generator: see the writable space section below.
+# Fedora's updates first, for the same reason as image/base.Containerfile:
+# dnf leaves a package it finds installed at the base image's version. A
+# kernel update replaces the one kernel in /usr/lib/modules (the dracut run
+# below rebuilds its initramfs anyway) and leaves its symvers in /boot and a
+# state directory behind, removed here; GRUB stays, so what its scriptlets
+# put in /boot is what the install below puts there too. The record the
+# scan goes by is written at the end, from the same metadata.
+dnf -y upgrade
+rm -rf /boot/symvers-* /var/lib/rpm-state/*
 dnf -y install \
     labwc foot greetd \
     xorg-x11-server-Xwayland \
@@ -168,5 +177,12 @@ systemctl enable NetworkManager.service
 # above for the same reason: labwc renders with GLES and declares no Vulkan
 # dependency, and the Flatpak app gets its GL from the runtime extension.
 dnf -y remove python3-boto3 python3-s3transfer python3-botocore || true
+# Every security advisory dnf knew for the packages installed above, from
+# the metadata `dnf -y upgrade` downloaded (-C): the scan before the push
+# fails on one the image lacks only if it is in here
+# (.github/actions/scan-image/advisories.sh).
+install -d /usr/share/fedora-bootc
+dnf -q -C advisory list --security --all --repo=updates --json \
+    > /usr/share/fedora-bootc/advisories-at-build.json
 dnf -y clean all
 rm -rf /var/cache/libdnf5 /var/log/dnf5.log*

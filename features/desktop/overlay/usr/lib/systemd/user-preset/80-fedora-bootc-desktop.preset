@@ -1,0 +1,4 @@
+# For every account: gcr's SSH agent, socket-activated, so nothing runs until
+# something connects (etc/profile.d/gcr-ssh-agent.sh points SSH_AUTH_SOCK at
+# it).
+enable gcr-ssh-agent.socket

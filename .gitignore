@@ -1,11 +1,6 @@
 # Build output
 output/
 *.qcow2
-# rechunked OCI directory written by the chunkah build stage
-/out/
-
-# kernel + initramfs handed from phase one to the sealing stage (Containerfile)
-/kernel/
 
 # Log files
 *.log
@@ -21,6 +16,9 @@ output/
 secrets.*
 secret.*
 id_*
+# Anthropic's PUBLIC release key, which the dev builds check Claude Code's
+# signed manifest with (devtools/claude-code.sh).
+!devtools/claude-code.asc
 
 # Miscellaneous
 **/completions/copilot.fish

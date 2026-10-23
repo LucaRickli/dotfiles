@@ -1,0 +1,28 @@
+# Put development tools from devtools/tools.txt on the runner's PATH, the way
+# the dev container and the VS Code Flatpak get them: the pinned release,
+# checked against upstream's sha256 (devtools/install.sh), so a job runs the
+# same binary as everyone else and nothing a job downloads goes unchecked.
+# For `just`, which every job runs its recipes with: a setup-* action would
+# fetch it with no checksum at all and hand it the job's token on top.
+name: Install tools
+description: devtools/install.sh the named tools (devtools/tools.txt pins) and add them to PATH
+inputs:
+  tools:
+    description: names from devtools/tools.txt, whitespace-separated
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Install
+      shell: bash
+      env:
+        TOOLS: ${{ inputs.tools }}
+      # The GITHUB_PATH write is the one way onto the PATH of the steps that
+      # follow, and what lands there was just checked against upstream's
+      # sha256: hence the zizmor ignore.
+      run: | # zizmor: ignore[github-env]
+        set -euo pipefail
+        prefix="${RUNNER_TEMP}/devtools"
+        # shellcheck disable=SC2086  # one name per word
+        devtools/install.sh "$prefix" $TOOLS
+        echo "${prefix}/bin" >> "$GITHUB_PATH"

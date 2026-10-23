@@ -10,17 +10,40 @@
 #
 #   NVIDIA_KMOD=open   NVIDIA open kernel modules: Turing (RTX 2000/GTX 16) and newer
 #   NVIDIA_KMOD=closed legacy proprietary modules: Maxwell/Pascal/Volta (GTX 900/1000)
-# (an ARG of the Containerfile's os-nvidia stage, open by default)
+# (from ADDON_FLAVOR, the add-on build's argument in image/addon.Containerfile,
+# `just build nvidia closed`; open by default)
 #
 set -euxo pipefail
 
+NVIDIA_KMOD=${ADDON_FLAVOR:-open}
 KVER=$(rpm -q kernel-core --qf '%{VERSION}-%{RELEASE}.%{ARCH}')
 REL=$(rpm -E %fedora)
 
 # --- RPM Fusion free + nonfree ------------------------------------------------
-dnf -y install \
+# The release packages come from whichever mirror mirrors.rpmfusion.org
+# redirects to, and dnf checks no signature on a package given by URL
+# (localpkg_gpgcheck is off by default), so without more everything after,
+# repo keys included, would rest on that mirror. Fedora ships RPM Fusion's
+# signing keys in distribution-gpg-keys: those are imported first, and the
+# two packages must be signed by them (an unsigned, tampered or differently
+# signed package fails the transaction). The whole package step runs with
+# the Secure Boot key mounted (see the top), which is why it matters most
+# here.
+# The two keys are in rpm's keyring for this check alone and deleted right
+# after it, so the image's keyring is the one its packages make: dnf
+# imports a repository's key from the verified release package when it
+# first installs from that repository (nonfree's in the package step; free
+# provides nothing the image installs).
+dnf -y install distribution-gpg-keys
+keys=$(rpm -qa 'gpg-pubkey*' --qf '%{VERSION}\n' | LC_ALL=C sort)
+rpmkeys --import \
+    "/usr/share/distribution-gpg-keys/rpmfusion/RPM-GPG-KEY-rpmfusion-free-fedora-${REL}" \
+    "/usr/share/distribution-gpg-keys/rpmfusion/RPM-GPG-KEY-rpmfusion-nonfree-fedora-${REL}"
+dnf -y install --setopt=localpkg_gpgcheck=1 \
     "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-${REL}.noarch.rpm" \
     "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${REL}.noarch.rpm"
+LC_ALL=C comm -13 <(printf '%s\n' "$keys") <(rpm -qa 'gpg-pubkey*' --qf '%{VERSION}\n' | LC_ALL=C sort) |
+    xargs -r rpmkeys --delete
 
 # --- Kernel headers for exactly the image's kernel ----------------------------
 # fedora-bootc enables updates-archive, so this version stays installable after

@@ -1,0 +1,82 @@
+#!/bin/sh
+# /app/bin/claude-sandboxed: Claude Code with --dangerously-skip-permissions
+# (it asks nothing), in a sandbox of its own inside the app's (flatpak-spawn
+# --sandbox, through flatpak's portal, which needs no permission). It gets
+# the git repository it is started in, the network and the tools in /app;
+# no other files, no D-Bus, no host commands, no ssh-agent, no Wayland
+# display. The network is the app's, the host's: services on localhost and
+# the host's Xwayland (its abstract socket) are reachable from in here.
+# Claude Code's own sandbox cannot run in a Flatpak, so this is the boundary
+# for running it without questions.
+#
+# The repository's .git, .vscode, .devcontainer, .devcontainer.json and
+# .claude are read-only: what runs later outside this box, by git, VS Code,
+# Dev Containers or the claude outside (hooks, core.fsmonitor, tasks,
+# initializeCommand, Claude hooks). An empty directory is made where one of
+# the four directories is missing, so none can be added either; git ignores
+# empty directories. A missing .devcontainer.json cannot be held that way
+# (an empty file is not valid JSON), nor a new .cargo/config.toml, which
+# rust-analyzer runs as it runs build.rs. mise's config at the top level
+# (mise.toml, mise.local.toml and the rest) runs outside too, at the next cd
+# in a terminal, but only once you trust it as it is (MISE_PARANOID,
+# devtools/mise-config.toml). So it commits nothing: read git status and its
+# diff, as it can still change the Justfile, build scripts and CI, then
+# build and commit yourself.
+#
+# In a worktree, .git is a file naming the repository elsewhere; that is
+# shown read-only as well, or git would not work in here.
+#
+# Its login, settings and caches are in a directory of its own, never the
+# CLAUDE_CONFIG_DIR of the claude outside, whose hooks would run outside.
+# --shell runs your shell in the same box instead, to look around or build
+# what it changed.
+set -eu
+root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    echo "claude-sandboxed: not in a git repository. It runs in one, so that you review its changes with git (git init makes one)." >&2
+    exit 1
+}
+dir=$XDG_DATA_HOME/claude-sandboxed
+outer=${CLAUDE_CONFIG_DIR:-$XDG_CONFIG_HOME/claude}
+# Compared as real paths, as git gives the top level: /home is a link to
+# var/home on Fedora's atomic and bootc systems.
+case $root in
+/ | "$(realpath -- "$HOME")") echo "claude-sandboxed: $root holds more than a project" >&2 && exit 1 ;;
+esac
+case $(realpath -m -- "$outer")/ in
+"$(realpath -m -- "$dir")"/* | "$root"/*) echo "claude-sandboxed: CLAUDE_CONFIG_DIR ($outer) would be inside its box" >&2 && exit 1 ;;
+esac
+mkdir -p "$dir" "$root/.vscode" "$root/.devcontainer" "$root/.claude"
+# The repository itself, when .git names it: in a worktree its own gitdir
+# and the main checkout's .git it shares, for a submodule the superproject's
+# .git/modules/<name>. Left out where $root/.git already covers it, or the
+# shared one does.
+gitdir=$(realpath -- "$(git rev-parse --path-format=absolute --git-dir)")
+common=$(realpath -- "$(git rev-parse --path-format=absolute --git-common-dir)")
+case $gitdir/ in "$root"/* | "$common"/*) gitdir= ;; esac
+case $common/ in "$root"/*) common= ;; esac
+
+if [ "${1:-}" = --shell ]; then
+    shift
+    set -- "${SHELL:-/bin/sh}" "$@"
+else
+    set -- /app/bin/claude --dangerously-skip-permissions "$@"
+fi
+# The box starts from the app's environment, not this one: what it needs
+# from here is named. Its home is an empty tmpfs, so the XDG dirs, Go's and
+# Cargo's are kept in $dir.
+exec flatpak-spawn --sandbox --watch-bus \
+    --sandbox-expose-path="$root" \
+    --sandbox-expose-path-ro="$root/.git" \
+    --sandbox-expose-path-ro="$root/.vscode" \
+    --sandbox-expose-path-ro="$root/.devcontainer" \
+    --sandbox-expose-path-ro-try="$root/.devcontainer.json" \
+    --sandbox-expose-path-ro="$root/.claude" \
+    ${gitdir:+"--sandbox-expose-path-ro=$gitdir"} \
+    ${common:+"--sandbox-expose-path-ro=$common"} \
+    --sandbox-expose-path="$dir" \
+    --env=CLAUDE_CONFIG_DIR="$dir/claude" \
+    --env=XDG_CONFIG_HOME="$dir/config" --env=XDG_DATA_HOME="$dir/data" \
+    --env=XDG_CACHE_HOME="$dir/cache" --env=XDG_STATE_HOME="$dir/state" \
+    --env=GOPATH="$dir/go" --env=CARGO_HOME="$dir/cargo" \
+    --env=TERM="${TERM:-dumb}" --env=COLORTERM="${COLORTERM:-}" \
+    --directory="$(pwd -P)" "$@"

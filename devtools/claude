@@ -1,0 +1,44 @@
+#!/bin/sh
+# /usr/local/bin/claude in the dev container: Claude Code, downloaded from
+# Anthropic on first use. It is not open source, so the published image
+# carries only its pin (/usr/local/share/claude-code/pin: version, URL,
+# sha256, size), which the Containerfile took from Anthropic's signed
+# manifest (devtools/claude-code.sh). The download goes into your data
+# directory, once per version (in a toolbox the host's
+# ~/.local/share/claude-code), and is kept only if it matches the pin.
+read -r version url sha256 size </usr/local/share/claude-code/pin || exit
+bin=${XDG_DATA_HOME:-$HOME/.local/share}/claude-code/$version/claude
+
+if [ ! -x "$bin" ]; then
+    echo "claude: downloading Claude Code $version from Anthropic ($((size / 1000000)) MB), once" >&2
+    dir=${bin%/*}
+    mkdir -p "$dir" || exit
+    # Into place only once checked, under a name of its own: two shells
+    # starting it at once each move a whole file there.
+    tmp=$(mktemp "$bin.XXXXXX") || exit
+    trap 'rm -f "$tmp"' EXIT
+    trap 'exit 130' INT TERM HUP
+    if ! curl -fL --retry 5 -# -o "$tmp" "$url" ||
+        [ "$(stat -c %s "$tmp")" != "$size" ] ||
+        ! echo "$sha256  $tmp" | sha256sum -c --status -; then
+        echo "claude: the download failed or does not match the pin; nothing installed" >&2
+        exit 1
+    fi
+    chmod 755 "$tmp" && mv -f "$tmp" "$bin" || exit
+    # The versions older images installed. A newer one stays: in a toolbox
+    # this home is shared with toolboxes of other images.
+    for old in "${dir%/*}"/*/; do
+        old=${old%/} v=${old##*/}
+        if [ "$v" != "$version" ] &&
+            [ "$(printf '%s\n' "$v" "$version" | sort -V | head -n 1)" = "$v" ]; then
+            rm -rf "$old"
+        fi
+    done
+fi
+
+# Updates off: the version is the image's, and Renovate moves the pin.
+# Claude's own updater would put a newer one in ~/.local/bin (the host's, in
+# a toolbox), ahead of this on PATH. The image sets both as well, for the
+# copy the VS Code extension runs.
+export DISABLE_UPDATES=1 DISABLE_INSTALLATION_CHECKS=1
+exec "$bin" "$@"

@@ -26,6 +26,11 @@ packages:
   # adds one to the XRDP stack. The PAM module is the -pam subpackage.
   - gnome-keyring
   - gnome-keyring-pam
+  # SSH agent for every session: gcr's (gcr-ssh-agent.socket, enabled by the
+  # preset in overlay/), which offers the keys in ~/.ssh (`ssh-add` loads one
+  # with a passphrase). overlay/etc/profile.d points SSH_AUTH_SOCK at it, so
+  # Flatpaks with SSH access (the VS Code one) sign without the key files.
+  - gcr
 
   # Audio
   - pipewire

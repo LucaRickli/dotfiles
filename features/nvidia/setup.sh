@@ -6,6 +6,9 @@
 #
 set -euxo pipefail
 
+# open or closed modules: the add-on build's ADDON_FLAVOR (pre-install.sh)
+NVIDIA_KMOD=${ADDON_FLAVOR:-open}
+
 # --- Early KMS ----------------------------------------------------------------
 # RPM Fusion ships omit_drivers for the nvidia modules; force them in.
 # image/initramfs.sh rebuilds the initramfs after this and verifies the

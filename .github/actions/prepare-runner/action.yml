@@ -10,10 +10,11 @@
 #   root disk again.
 # - Ubuntu confines user namespaces with AppArmor. podman and buildah have
 #   profiles that allow them, but a sandbox inside a build (the Flatpak
-#   install in the live stage runs bwrap) does not: the bwrap-userns-restrict
-#   profile strips the capabilities of whatever bwrap starts. The runner is a
-#   throwaway VM, so the restriction is lifted and bwrap's children stay in
-#   its own profile (the override bootc-dev/actions ships for 26.04, #55).
+#   install in installer/live.Containerfile runs bwrap) does not: the
+#   bwrap-userns-restrict profile strips the capabilities of whatever bwrap
+#   starts. The runner is a throwaway VM, so the restriction is lifted and
+#   bwrap's children stay in its own profile (the override bootc-dev/actions
+#   ships for 26.04, #55).
 # - Disk. The image exists three times at once during a sealed build (see
 #   build.yml, ~37 GB on the NVIDIA variant). Public-repo runners come with a
 #   ~145 GB root disk and ~90 GB free, but GitHub only promises 14 GB, so the
@@ -36,7 +37,7 @@ inputs:
     description: remove unused preinstalled toolchains if fewer GB than this are free
     default: "70"
   pull-from:
-    description: Containerfiles whose registry FROM images to pre-pull (whitespace-separated)
+    description: Containerfiles whose registry FROM images to pre-pull (whitespace-separated, globs allowed)
     default: ""
   pull:
     description: further image references to pre-pull (whitespace-separated)
@@ -76,8 +77,8 @@ runs:
             /usr/share/swift /usr/local/share/boost /opt/microsoft \
             /usr/local/julia* /usr/lib/jvm /usr/local/share/powershell /usr/local/share/chromium \
             /swapfile /mnt/swapfile
-          # The tool cache is emptied, not removed: setup-* actions later in
-          # the job (setup-just) install into it and cannot recreate it.
+          # The tool cache is emptied, not removed: a setup-* action later
+          # in a job installs into it and cannot recreate it.
           sudo find "${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
           echo "freed $(( $(free_gb) - before )) GB"
         fi
@@ -100,7 +101,7 @@ runs:
         set -euo pipefail
         images=()
         # FROM lines naming a registry image (a dot in the first path part):
-        # not scratch, not a stage, not ${OS_BASE}, not oci:out.
+        # not scratch, not a stage, not ${BASE_IMAGE}.
         for f in $PULL_FROM; do
           while read -r ref; do images+=("$ref"); done < <(
             awk 'toupper($1) == "FROM" { i = 2; while ($i ~ /^--/) i++; print $i }' "$f" |

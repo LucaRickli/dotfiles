@@ -14,6 +14,15 @@
                         "type": "matchRepository"
                     }
                 }
+            ],
+            "ghcr.io/lucarickli/devcontainer": [
+                {
+                    "type": "sigstoreSigned",
+                    "keyPath": "/etc/pki/containers/fedora-bootc.pub",
+                    "signedIdentity": {
+                        "type": "matchRepository"
+                    }
+                }
             ]
         },
         "docker-daemon": {

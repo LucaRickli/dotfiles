@@ -1,0 +1,70 @@
+# Publish one locally built image: push it to its one immutable tag,
+# build-<sha><suffix> of ghcr.io/<owner>/<repository>, and record what was
+# pushed, by digest, for the job that signs it (.github/actions/sign): as
+# the output `ref`, and as the artifact pushed<suffix> (one line), which is
+# how the digests of a matrix job reach that one job. Every image this repo
+# publishes goes through here (build.yml's, release.yml's live image), so
+# the push flags exist once.
+#
+# Needs a registry login first and the scan (.github/actions/scan-image)
+# before it: nothing unscanned is pushed. No signing key comes near this
+# action: the job that pushes is the job that built and scanned, and the
+# key is used in a job that does nothing else (build.yml, `sign`). Until
+# that job has run, the tag is unsigned, which makes it unusable, not
+# dangerous: a machine's policy refuses an unsigned image, and release.yml
+# promotes nothing it cannot verify.
+name: Publish an image
+description: Push a local image to build-<sha><suffix> and record its digest for the sign job
+inputs:
+  image:
+    description: the local image to push (rootless podman storage)
+    required: true
+  suffix:
+    description: appended to build-<sha> for the one tag pushed ("", -uki, -nvidia, -nvidia-uki, -live, ...)
+    default: ""
+  repository:
+    description: the package under ghcr.io/<owner>/
+    default: fedora-bootc
+outputs:
+  ref:
+    description: what was pushed, by digest (ghcr.io/<owner>/<repository>@sha256:...)
+    value: ${{ steps.push.outputs.ref }}
+runs:
+  using: composite
+  steps:
+    # One tag, named after the commit, so a build is identifiable, immutable
+    # and collides with nothing; the tags machines follow are moved by
+    # release.yml only. The digest file is per call: a job publishes two
+    # images with this action.
+    - name: Push
+      id: push
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        SUFFIX: ${{ inputs.suffix }}
+        REPOSITORY: ${{ inputs.repository }}
+      run: |
+        set -euo pipefail
+        repo="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${REPOSITORY}"   # GHCR wants a lowercase owner
+        tag="build-${GITHUB_SHA:0:7}${SUFFIX}"
+        digestfile=$(mktemp -p "$RUNNER_TEMP")
+        podman push --retry 5 --retry-delay 15s --digestfile="$digestfile" "$IMAGE" "${repo}:${tag}"
+        ref="${repo}@$(cat "$digestfile")"
+        mkdir -p "${RUNNER_TEMP}/pushed"
+        echo "$ref" > "${RUNNER_TEMP}/pushed/${tag}"
+        echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+        echo "file=${RUNNER_TEMP}/pushed/${tag}" >> "$GITHUB_OUTPUT"
+        echo "pushed ${repo}:${tag}"
+
+    # For the sign job, which downloads every pushed* artifact of the run.
+    # overwrite: a re-run of the workflow pushes again and must be able to
+    # record the new digest under the same name (the artifacts of the first
+    # attempt are still there).
+    - name: Record the digest
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: pushed${{ inputs.suffix }}
+        path: ${{ steps.push.outputs.file }}
+        retention-days: 1
+        if-no-files-found: error
+        overwrite: true

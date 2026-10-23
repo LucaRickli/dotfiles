@@ -1,0 +1,14 @@
+#!/bin/sh
+# /app/bin/bcvk: bcvk (/app/libexec/bcvk, from tools.txt) run on the host,
+# where the podman, qemu and virtiofsd it drives are. It has podman
+# bind-mount its own executable into each VM's container, so it must run
+# from a path the host sees: /app is only in here, but flatpak deployed the
+# same file on the host, under the app-path in /.flatpak-info. Run there,
+# --log-dir works too (podman gets the journal's file descriptors, which
+# host-spawn would not pass on). Where the host is out of reach (no
+# permission, or no session helper, as in the build's test) it runs in here:
+# enough for --version and --help, and its podman says what is missing.
+if /app/libexec/host-command true </dev/null >/dev/null 2>&1; then
+    exec /app/libexec/host-command "$(sed -n 's/^app-path=//p' /.flatpak-info)/libexec/bcvk" "$@"
+fi
+exec /app/libexec/bcvk "$@"

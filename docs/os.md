@@ -47,9 +47,16 @@ it at the same address. Its WebGPU engine is young: on a Ryzen 7000 iGPU
 
 ## Other defaults
 
+- Updates are yours to run: `sudo bootc upgrade` stages the newest image for
+  the next boot (`--apply` reboots into it now), `sudo bootc rollback` goes
+  back. Nothing updates a machine by itself; the auto-update timer is masked.
 - Boot is silent: a splash with a spinner, no text (Esc shows the messages),
   and no boot menu unless you hold Space at power-on.
 - SSH: passwords for users, keys only for root. fail2ban guards SSH and XRDP.
+- Every session has an SSH agent (gcr's), which offers the keys in `~/.ssh`;
+  for one with a passphrase, run `ssh-add` once after login. Flatpaks with
+  SSH access, such as the VS Code one, sign through it without reading the
+  keys.
 - Tailscale is installed but off:
   `sudo systemctl enable --now tailscaled && sudo tailscale up`.
 - Cockpit (web admin) is installed but off:

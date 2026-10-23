@@ -38,7 +38,7 @@ done
 
 dnf -y install systemd-boot-unsigned sbsigntools fsverity-utils
 
-# Sign the loader with our db key (keys/ in the repo, mounted as build secrets).
+# Sign the loader with the Secure Boot db key (a podman build secret).
 sbsign --key /run/secrets/secureboot_key --cert /run/secrets/secureboot_cert \
     --output /usr/lib/systemd/boot/efi/systemd-bootx64.efi \
     /usr/lib/systemd/boot/efi/systemd-bootx64.efi

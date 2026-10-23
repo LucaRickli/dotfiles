@@ -1,0 +1,102 @@
+# Sign pushed images with the cosign key, then verify each signature the way
+# an installed machine does. The one place the key is used, in a job of its
+# own (build.yml `sign`, release.yml `sign`) that runs this action and
+# nothing else, once every push of the run is done: a third-party binary on
+# the runner can read every secret its job holds out of the runner's memory
+# (the runner has passwordless sudo), so the key is kept to a job in which
+# none runs, neither a build, nor a scanner, nor anything but checkout,
+# artifact download and cosign itself. What to sign comes in as files, one
+# digest reference each, written by .github/actions/publish and handed over
+# as artifacts: exactly this run's images, not whatever a concurrent run of
+# the same commit put behind the same tags.
+#
+# The registry login lives in a directory of the signing step alone, gone
+# when it ends, and is cosign's own: no login action in this job either.
+#
+# Key-based signing (not keyless): bootc/podman verify sigstore signatures
+# via containers-policy.json, which cannot express a GitHub Actions OIDC
+# identity. The key pair is `just cosign-keygen`'s: keys/cosign.pub
+# committed, the private half (<key dir>/cosign.key) the SIGNING_SECRET
+# secret.
+#
+# Signing is REQUIRED, not optional: the image ships a policy.json that
+# refuses any unsigned pull from this repo, so an unsigned tag is an image
+# no machine could install or upgrade to, and release.yml promotes only
+# what it can verify.
+name: Sign pushed images
+description: cosign-sign every digest in a directory of refs with the SIGNING_SECRET key, then verify
+inputs:
+  refs-dir:
+    description: >-
+      a directory of files, one ghcr.io/<owner>/<repository>@sha256:... each
+      (the run's pushed* artifacts, .github/actions/publish)
+    required: true
+  cosign-key:
+    description: the cosign private key (the SIGNING_SECRET secret)
+    required: true
+  registry-token:
+    description: the job's token, for pushing the signatures (packages write)
+    required: true
+runs:
+  using: composite
+  steps:
+    # A comparison in `if:`, so the key still reaches no step's environment
+    # but the signing one.
+    - name: Check the signing key
+      if: inputs.cosign-key == ''
+      shell: bash
+      run: |
+        echo "SIGNING_SECRET is not set. The image requires a valid cosign"
+        echo "signature to be pullable (features/updates/overlay/etc/containers/),"
+        echo "so the images pushed by this run stay unusable until they are signed."
+        echo "Set it to the contents of <key dir>/cosign.key (keys/README.md)."
+        exit 1
+
+    - name: Install cosign
+      uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      with:
+        # cosign v3 needs cosign-installer v4: v3 releases publish a
+        # .sigstore.json bundle instead of the .sig the older action fetches
+        # to verify the download, and it fails with curl exit 22 on the 404.
+        # Renovate bumps this pin together with the action (its
+        # github-actions manager knows cosign-release). The
+        # --new-bundle-format=false / --use-signing-config=false flags below
+        # undo v3's new defaults.
+        cosign-release: "v3.1.3"
+
+    # --tlog-upload=false: the trust anchor is the key in the image, not the
+    # public transparency log, and the machine-side policy does not consult
+    # Rekor either. Retried: a registry hiccup here would otherwise throw
+    # away the build. Signing the same digest twice is harmless.
+    #
+    # Then verified like an installed machine does: the committed public
+    # key, no transparency log. If this fails, the pushed image is
+    # unpullable, so catching it here beats finding out at `bootc upgrade`.
+    - name: Sign and verify
+      shell: bash
+      env:
+        COSIGN_PRIVATE_KEY: ${{ inputs.cosign-key }}
+        REGISTRY_TOKEN: ${{ inputs.registry-token }}
+        REFS_DIR: ${{ inputs.refs-dir }}
+      run: |
+        set -euo pipefail
+        DOCKER_CONFIG=$(mktemp -d -p "$RUNNER_TEMP")
+        export DOCKER_CONFIG
+        trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+        printf '%s\n' "$REGISTRY_TOKEN" | cosign login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        # Only a digest in one of this owner's packages is signed: what
+        # publish writes, and nothing a doctored file could point at.
+        ours="^ghcr\.io/${GITHUB_REPOSITORY_OWNER,,}/[a-z0-9._-]+@sha256:[0-9a-f]{64}$"
+        refs=$(cat "$REFS_DIR"/*)
+        test -n "$refs" || { echo "::error::nothing to sign in $REFS_DIR"; exit 1; }
+        for ref in $refs; do
+          [[ $ref =~ $ours ]] || { echo "::error::not one of this repository's images, refusing to sign: $ref"; exit 1; }
+          for attempt in 1 2 3; do
+            cosign sign -y --new-bundle-format=false --use-signing-config=false \
+              --tlog-upload=false --key env://COSIGN_PRIVATE_KEY "$ref" && break
+            [ "$attempt" = 3 ] && exit 1
+            echo "cosign sign attempt $attempt failed, retrying in 15s" >&2; sleep 15
+          done
+          cosign verify --key keys/cosign.pub --insecure-ignore-tlog=true "$ref" >/dev/null
+          echo "signed and verified ${ref}"
+        done

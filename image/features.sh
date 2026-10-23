@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 #
 # How the features fit together: checked here, for every build (the
-# Containerfile's `features` stage), `just check` and CI.
+# `features` stage of image/base.Containerfile and image/addon.Containerfile),
+# `just check` and CI.
 #
-#   features.sh SRC        only check SRC (a features/ directory)
-#   features.sh SRC OUT    check, then sort SRC into what each build step reads
+#   features.sh SRC            only check SRC (a features/ directory)
+#   features.sh SRC OUT        check, then sort SRC into what each build step reads
+#   features.sh SRC --addons   check, then print the add-ons as a JSON list
+#                              (`just images`: CI's image matrix)
 #
 # Every feature has a pkg.yml:
 #
@@ -13,7 +16,10 @@
 #                           would only duplicate another
 #   requires: [base, ...]   features this one needs in the same image
 #   addon: true             not part of the base image, built on top of it
-#                           for an image of its own (features/nvidia/)
+#                           for an image of its own (features/nvidia/). Its
+#                           name becomes that image's tags (<name>, <name>-uki),
+#                           so it may not be one that is taken: latest, live,
+#                           base, *-uki, *-split, build-*
 #
 # For each set, `base` (every feature that is not an add-on) and one per
 # add-on, OUT gets:
@@ -33,7 +39,11 @@
 set -euo pipefail
 shopt -s nullglob
 
-src=$1 out=${2:+$(realpath -m "$2")}
+src=$1 out='' addons=''
+case ${2:-} in
+    --addons) addons=1 ;;
+    ?*) out=$(realpath -m "$2") ;;
+esac
 cd "$src"
 
 # pkg.yml is read once per feature, as JSON; jq does the rest. yq comes in
@@ -87,7 +97,9 @@ errors=$(q '
               elif ($by[.] | addon) then "\($f) requires \(.), an add-on, which nothing can require"
               else empty end),
         (select(.build == "not-executable") | "\($f)/build.sh is not executable"),
-        (select(.build == "yes" and addon) | "\($f) is an add-on, which cannot have a build.sh")
+        (select(.build == "yes" and addon) | "\($f) is an add-on, which cannot have a build.sh"),
+        (select(addon and (.name | test("^(latest|live|base)$|-(uki|split)$|^build-")))
+            | "\($f) is an add-on, so its name is an image tag, and that one is taken")
       end')
 
 # No two features ship the same file: the overlays are copied onto / one
@@ -101,6 +113,7 @@ if [ -n "$errors$dupes" ]; then
     printf '%s\n' "$errors" "$dupes" | sed '/^$/d' >&2
     exit 1
 fi
+if [ -n "$addons" ]; then q '[.[] | select(addon) | .name] | tojson'; exit 0; fi
 [ -n "$out" ] || exit 0
 
 mkdir -p "$out"

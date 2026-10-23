@@ -1,0 +1,12 @@
+#!/bin/sh
+# /app/bin/claude: Claude Code (/app/extra/claude), which flatpak downloads
+# from Anthropic on each machine (extra-data, devtools/flatpak/build.sh). Its
+# updates are off: the version is the app's, and its own updater would put
+# a newer one in ~/.local/bin. The app's environment says so too (for the
+# copy the VS Code extension runs); here as well, for `flatpak enter` and an
+# override of it.
+export DISABLE_UPDATES=1 DISABLE_INSTALLATION_CHECKS=1
+# The launcher's CLAUDE_CONFIG_DIR (devtools/flatpak/code), also for `flatpak
+# run --command=claude`; claude-sandboxed sets its own.
+export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$XDG_CONFIG_HOME/claude}"
+exec /app/extra/claude "$@"

@@ -13,10 +13,10 @@ shopt -s nullglob
 
 # --- Builds and overlays -------------------------------------------------------
 # No file both built (image/builds.sh lists them) and in any feature's
-# overlay/, add-ons included (image/features.sh lists those): the
-# Containerfile copies the built files after the base overlays, and an
-# add-on's overlay after both, so one of the two would silently lose. Only
-# the base run has the lists.
+# overlay/, add-ons included (image/features.sh lists those):
+# image/base.Containerfile copies the built files after the base overlays,
+# and image/addon.Containerfile an add-on's overlay after both, so one of the
+# two would silently lose. Only the base run has the lists.
 if [ -e "$CTX/root-paths.txt" ]; then
     both=$(LC_ALL=C comm -12 "$CTX/root-paths.txt" "$CTX/overlay-paths.txt")
     test -z "$both" || { printf 'built and in an overlay/:\n%s\n' "$both" >&2; exit 1; }
@@ -66,8 +66,8 @@ for setup in "$CTX"/features/*/setup.sh; do
 done
 
 # --- The image as a whole -----------------------------------------------------
-# What the Containerfile's group excludes keep out (a second desktop and
-# LibreOffice), so a comps change fails the build instead of shipping them.
+# What image/base.Containerfile's group excludes keep out (a second desktop
+# and LibreOffice), so a comps change fails the build instead of shipping them.
 # (`! rpm -q ...` would be exempt from set -e, hence test -z.)
 test -z "$(rpm -qa gdm gnome-shell mutter libreoffice-core)"
 

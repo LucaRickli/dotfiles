@@ -4,8 +4,9 @@
 # top of it (image/features.sh sorts them). Each feature's pre-install.sh,
 # then every package (pkg.yml) in one transaction, then each
 # post-install.sh. (Part 2, image/finalize.sh, runs after the set's overlay/
-# trees are copied in.) Runs inside `podman build` (see Containerfile) with
-# the set's package lists, hooks and repo files at /ctx/features.
+# trees are copied in.) Runs inside `podman build` (image/base.Containerfile
+# for the base, image/addon.Containerfile for an add-on) with the set's
+# package lists, hooks and repo files at /ctx/features.
 #
 set -euxo pipefail
 

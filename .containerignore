@@ -1,4 +1,4 @@
-# Kept out of the build context. The Containerfile COPYs only image/,
+# Kept out of the build context. The Containerfiles COPY only image/,
 # features/, installer/ and keys/cosign.pub; the Secure Boot key material
 # enters via `podman build --secret`, never via the context.
 #
@@ -19,11 +19,16 @@ Justfile
 renovate.json
 # the dev container and the VS Code Flatpak, built from their own directory
 devtools
+# podman reads a -f file directly, so the build does not need it in the
+# context; in it, installer/live.Containerfile would land in its own
+# `COPY installer/`, and editing a comment would rerun the live build
+installer/*.Containerfile
 
-# keys/ holds private key material (git-ignored *.key), so the whole directory
-# stays out of the build context. The one exception is the cosign PUBLIC key:
-# the image needs it to verify its own updates (/etc/containers/policy.json),
-# and it is public by definition. Order matters, the negation must come after
-# the directory it re-includes from.
+# keys/ stays out of the build context as a whole: the private keys live
+# outside the checkout (Justfile, keys_dir), but a copy left in keys/
+# (git-ignored *.key) must not reach a build either. The one exception is the
+# cosign PUBLIC key: the image needs it to verify its own updates
+# (/etc/containers/policy.json), and it is public by definition. Order
+# matters, the negation must come after the directory it re-includes from.
 keys
 !keys/cosign.pub

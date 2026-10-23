@@ -43,8 +43,11 @@ sudo bootc switch ghcr.io/lucarickli/fedora-bootc:latest-uki  # once, after inst
 | `latest`, `nvidia`                    | unsealed (kernel in place)                                                           |
 | `build-<sha>`, `build-<sha>-uki`, ... | one per build, for testing it                                                        |
 
-A release every Monday; machines also update themselves. Releases, updates,
-scanning and CI: [docs/architecture/updates.md](docs/architecture/updates.md).
+A release every Monday, and one within a day when the released images lack
+a critical Fedora security update; a machine takes it when you run
+`sudo bootc upgrade`, never by itself. Releases, updates, scanning and CI:
+[docs/architecture/updates.md](docs/architecture/updates.md); reporting a
+vulnerability: [SECURITY.md](SECURITY.md).
 Also: Secure Boot and TPM2
 ([docs/secureboot-tpm2.md](docs/secureboot-tpm2.md)), rescue
 ([docs/rescue.md](docs/rescue.md)), pulling through a cache
@@ -85,11 +88,13 @@ store).
 `devtools/`
 
 Go, Deno, Rust and Protocol Buffers with their language servers and linters,
-the Kubernetes and Talos CLIs, sops, age, trivy, gh and fish, plus the VS Code
-extensions for them, pinned in `tools.txt` and `extensions.txt`. They are not
-on the host: the VS Code Flatpak (`ghcr.io/lucarickli/code`, its terminal is
-a development environment) and the dev container
-(`ghcr.io/lucarickli/devcontainer`) carry them.
+the Kubernetes and Talos CLIs, sops, age, cosign, trivy, gh, yq, shellcheck,
+actionlint, just, bcvk, fish and mise (other versions per project), plus the
+VS Code extensions for them, pinned in `tools.txt` and `extensions.txt`.
+They are not on the host: the VS Code Flatpak (`ghcr.io/lucarickli/code`,
+its terminal is a development environment) and the dev container
+(`ghcr.io/lucarickli/devcontainer`) carry them, and Claude Code, which each
+machine downloads from Anthropic.
 
 ```sh
 just flatpak && just flatpak-install   # build VS Code locally and install it for your user
@@ -102,14 +107,17 @@ offline use: [docs/devtools.md](docs/devtools.md).
 
 ## Building it
 
-`Containerfile`, `Justfile`, `scripts/` (helpers the recipes run). Needs
-rootless `podman` and `just`; `just check` also `yq`, the VM recipes `bcvk`,
-`qemu` and OVMF.
+`image/*.Containerfile`, `installer/live.Containerfile`, `Justfile`,
+`scripts/` (helpers the recipes run). Needs rootless `podman` and `just`
+(1.48 or newer); `just check`, `just images` and add-on builds also `yq` and
+`jq`, the VM recipes `bcvk`, `qemu` and OVMF. The development tools bring
+`just`, `yq`, `jq` and `bcvk`; qemu and OVMF stay the host's
+([docs/devtools.md](docs/devtools.md#vms)).
 
 ```sh
-just build           # sealed image: localhost/fedora-bootc:latest
-just build-nvidia    # NVIDIA variant (`just build-nvidia closed` for GTX 900/1000)
-just qcow2           # install it into output/disk.qcow2
+just build           # the OS: localhost/fedora-bootc:latest (unsealed), :latest-uki (sealed)
+just build nvidia    # the NVIDIA add-on: :nvidia, :nvidia-uki (`just build nvidia closed` for GTX 900/1000)
+just qcow2           # install :latest-uki into output/disk.qcow2
 just demo-user       # optional: demo/demo login, on that disk only
 just vm              # boot it; the greeter listing five sessions is the pass
 just vm-secureboot   # the same with Secure Boot enforcing
@@ -121,4 +129,6 @@ The composefs backend is experimental: boot-test every build in a VM before it
 goes near real hardware. How the build works, stage by stage:
 [docs/architecture/build.md](docs/architecture/build.md). `just --list` shows
 the rest. Your own copy, with your keys and CI: [docs/fork.md](docs/fork.md).
-`keys/` holds the Secure Boot certificates and the cosign public key.
+`keys/` holds the Secure Boot certificates and the cosign public key; the
+private keys a build signs with live outside the checkout, in
+`~/.local/share/fedora-bootc/keys` ([keys/README.md](keys/README.md)).
