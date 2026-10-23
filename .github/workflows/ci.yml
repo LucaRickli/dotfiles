@@ -354,8 +354,14 @@ jobs:
     needs: changes
     if: needs.changes.outputs.devcontainer == 'true'
     uses: ./.github/workflows/devcontainer.yml
+    # What devcontainer.yml's jobs ask for, issues: write included: its
+    # `security` job runs only for security.yml's dispatches, but GitHub
+    # checks every called job's permissions before a run starts. On a pull
+    # request nothing is pushed or uploaded; fork PRs get a read-only token
+    # whatever is granted here.
     permissions:
       contents: read
+      issues: write
       packages: write
       security-events: write
 
