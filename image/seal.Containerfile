@@ -45,7 +45,7 @@ RUN mkdir /kernel && bootc container split-kernel-and-rootfs --rootfs / --output
 # pinned ID and runs it with `podman run`, with the split image read-only, an
 # empty output directory and no network. A FROM line so that Renovate's
 # dockerfile manager and prepare-runner's pre-pull see the pin.
-FROM quay.io/coreos/chunkah:latest@sha256:8b56578258d1d10d3e1c7b0f71a4d05317c5fde331c4f483576a1b60e65f0cea AS chunkah
+FROM quay.io/coreos/chunkah:latest@sha256:71e593421c5de7dcc7c8c5c50e98d3bac572055a76f399f61a491d123c20a523 AS chunkah
 
 # Tools to build and sign the UKI, kept out of the OS image.
 FROM registry.fedoraproject.org/fedora-minimal:44 AS tools

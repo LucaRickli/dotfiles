@@ -25,7 +25,7 @@ APP_ID=io.github.lucarickli.Code
 # lags a new branch by some weeks, so this moves by hand once a year.
 RUNTIME=26.08
 # renovate: datasource=github-releases depName=microsoft/vscode
-VSCODE_VERSION=1.140.0
+VSCODE_VERSION=1.142.0
 # Anthropic's stable channel (renovate.json follows its npm dist-tag); the
 # dev container's pin (devtools/Containerfile) moves with it.
 # renovate: datasource=npm depName=@anthropic-ai/claude-code
