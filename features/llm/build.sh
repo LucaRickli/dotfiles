@@ -9,7 +9,7 @@
 set -euxo pipefail
 
 # renovate: datasource=crate depName=shimmy
-SHIMMY_VERSION=2.6.4
+SHIMMY_VERSION=2.6.5
 
 dnf -y install cargo
 # CARGO_HOME in /tmp: /root is a dangling symlink in the base image. The
