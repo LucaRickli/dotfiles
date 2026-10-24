@@ -62,7 +62,7 @@ runs:
         # github-actions manager knows cosign-release). The
         # --new-bundle-format=false / --use-signing-config=false flags below
         # undo v3's new defaults.
-        cosign-release: "v3.1.3"
+        cosign-release: "v3.1.4"
 
     # --tlog-upload=false: the trust anchor is the key in the image, not the
     # public transparency log, and the machine-side policy does not consult
