@@ -1,5 +1,0 @@
-{
-    "conditions": [
-        { "path-exists": "/usr/share/fedora-bootc/cockpit-metrics-enabled" }
-    ]
-}

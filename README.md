@@ -1,134 +1,28 @@
 # Dotfiles
 
-A personal Fedora 44 desktop, built as a bootable container image and
-installed and updated by [bootc](https://bootc.dev/). It boots systemd-boot and
-a sealed UKI ([composefs backend](https://bootc.dev/bootc/experimental-composefs.html))
-signed with your own Secure Boot key, and only accepts cosign-signed updates.
+Configuration for fish, ghostty, niri, labwc, Noctalia and fastfetch, kept in
+`home/.config` and linked into `~/.config` with
+[GNU Stow](https://www.gnu.org/software/stow/), and the desktop apps to
+install.
 
-Four parts, each built and shipped on its own:
+## On a new machine
 
-```mermaid
-flowchart LR
-    os["The OS<br/>features/ image/"] -- "build.yml, release.yml" --> ghcr[("ghcr.io")]
-    dev["Development tools<br/>devtools/"] -- "devcontainer.yml, flatpak.yml" --> ghcr
-    ins["The installer<br/>installer/"] -- "release.yml" --> iso["Live ISO<br/>GitHub release"]
-    dots["Dotfiles<br/>home/.config/"]
-    iso -- "installs" --> pc["Your machine"]
-    ghcr -- "bootc upgrade, Flatpak, toolbox" --> pc
-    dots -- "dotfiles.sh" --> pc
-```
-
-## The OS
-
-`features/` (one folder per feature: its packages, files and setup; the
-NVIDIA driver is an add-on), `image/` (the build steps)
-
-greetd with noctalia-greeter, five Wayland sessions (niri, labwc, sway, river,
-wayfire) running the [Noctalia](https://noctalia.dev) shell, ghostty and fish,
-podman and docker, QEMU with Virtual Machine Manager, XRDP, a local LLM server
-(shimmy, off by default). More, with remote desktop, VMs, the LLM and NVIDIA:
-[docs/os.md](docs/os.md).
+Clone this repository anywhere, then in the checkout:
 
 ```sh
-sudo bootc upgrade     # stage the newest image for the next boot (--apply: reboot into it)
-sudo bootc rollback    # back to the previous one (also in the boot menu)
-sudo bootc status
-sudo bootc switch ghcr.io/lucarickli/fedora-bootc:latest-uki  # once, after installing a local build
-```
-
-| Tag                                   | Image                                                                                |
-| ------------------------------------- | ------------------------------------------------------------------------------------ |
-| `latest-uki`                          | sealed and signed; what the ISO installs (`nvidia-uki` on GTX 16 / RTX 20 and newer) |
-| `nvidia-uki`                          | the same, with the NVIDIA driver                                                     |
-| `latest`, `nvidia`                    | unsealed (kernel in place)                                                           |
-| `build-<sha>`, `build-<sha>-uki`, ... | one per build, for testing it                                                        |
-
-A release every Monday, and one within a day when the released images lack
-a critical Fedora security update; a machine takes it when you run
-`sudo bootc upgrade`, never by itself. Releases, updates, scanning and CI:
-[docs/architecture/updates.md](docs/architecture/updates.md); reporting a
-vulnerability: [SECURITY.md](SECURITY.md).
-Also: Secure Boot and TPM2
-([docs/secureboot-tpm2.md](docs/secureboot-tpm2.md)), rescue
-([docs/rescue.md](docs/rescue.md)), pulling through a cache
-([docs/pull-through-cache.md](docs/pull-through-cache.md)), enterprise Wi-Fi
-([docs/enterprise-wifi.md](docs/enterprise-wifi.md)).
-
-## The installer
-
-`installer/`
-
-A live ISO with a graphical wizard, which installs `latest-uki` (`nvidia-uki`
-on a GTX 16 / RTX 20 series or newer). Take it from a
-[release](https://github.com/lucarickli/dotfiles/releases) or build it with
-`just iso`, boot it and follow the wizard. Without the ISO, `bootc install`
-from any live USB: [docs/install.md](docs/install.md). Afterwards, enroll your
-Secure Boot keys and bind LUKS to the TPM:
-[docs/secureboot-tpm2.md](docs/secureboot-tpm2.md).
-
-## Dotfiles
-
-`home/.config/`, `dotfiles.sh`
-
-Never part of the image. On a new machine:
-
-```sh
-git clone https://github.com/lucarickli/dotfiles.git
-cd dotfiles
 ./dotfiles.sh
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 flatpak install -y flathub $(grep -vE '^\s*(#|$)' flatpaks.txt)
 ```
 
-`dotfiles.sh` links `home/.config` into `~/.config` (GNU Stow), asking before
-it replaces anything. The Flatpaks: Firefox, Remmina and Bazaar (the app
-store).
+`dotfiles.sh` (needs GNU Stow) links each entry of `home/.config` into
+`~/.config`, asking before it replaces anything. With the links in place,
+editing a config in `~/.config` edits this checkout; run it again after
+pulling changes that add or rename entries. `flatpaks.txt` lists the apps:
+Firefox, Remmina and Bazaar (the app store).
 
-## Development tools
+## Checks
 
-`devtools/`
-
-Go, Deno, Rust and Protocol Buffers with their language servers and linters,
-the Kubernetes and Talos CLIs, sops, age, cosign, trivy, gh, yq, shellcheck,
-actionlint, just, bcvk, fish and mise (other versions per project), plus the
-VS Code extensions for them, pinned in `tools.txt` and `extensions.txt`.
-They are not on the host: the VS Code Flatpak (`ghcr.io/lucarickli/code`,
-its terminal is a development environment) and the dev container
-(`ghcr.io/lucarickli/devcontainer`) carry them, and Claude Code, which each
-machine downloads from Anthropic.
-
-```sh
-just flatpak && just flatpak-install   # build VS Code locally and install it for your user
-toolbox create --image ghcr.io/lucarickli/devcontainer:latest dev
-```
-
-In a project, `.devcontainer/devcontainer.json`:
-`{ "image": "ghcr.io/lucarickli/devcontainer:latest" }`. More, with ports and
-offline use: [docs/devtools.md](docs/devtools.md).
-
-## Building it
-
-`image/*.Containerfile`, `installer/live.Containerfile`, `Justfile`,
-`scripts/` (helpers the recipes run). Needs rootless `podman` and `just`
-(1.48 or newer); `just check`, `just images` and add-on builds also `yq` and
-`jq`, the VM recipes `bcvk`, `qemu` and OVMF. The development tools bring
-`just`, `yq`, `jq` and `bcvk`; qemu and OVMF stay the host's
-([docs/devtools.md](docs/devtools.md#vms)).
-
-```sh
-just build           # the OS: localhost/fedora-bootc:latest (unsealed), :latest-uki (sealed)
-just build nvidia    # the NVIDIA add-on: :nvidia, :nvidia-uki (`just build nvidia closed` for GTX 900/1000)
-just qcow2           # install :latest-uki into output/disk.qcow2
-just demo-user       # optional: demo/demo login, on that disk only
-just vm              # boot it; the greeter listing five sessions is the pass
-just vm-secureboot   # the same with Secure Boot enforcing
-just check           # validate the dotfiles and script syntax
-just iso             # live installer: output/fedora-bootc-live.iso
-```
-
-The composefs backend is experimental: boot-test every build in a VM before it
-goes near real hardware. How the build works, stage by stage:
-[docs/architecture/build.md](docs/architecture/build.md). `just --list` shows
-the rest. Your own copy, with your keys and CI: [docs/fork.md](docs/fork.md).
-`keys/` holds the Secure Boot certificates and the cosign public key; the
-private keys a build signs with live outside the checkout, in
-`~/.local/share/fedora-bootc/keys` ([keys/README.md](keys/README.md)).
+`./check.sh` checks the syntax of `dotfiles.sh`, the fish files and the JSON
+(needs fish and jq). CI runs it on every push to main and every pull
+request.

@@ -1,4 +1,0 @@
-# systemd-boot instead of GRUB/bootupd. `bootc install` copies the (signed)
-# loader from /usr/lib/systemd/boot/efi/ into the ESP.
-[install]
-bootloader = "systemd"

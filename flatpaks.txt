@@ -1,5 +1,5 @@
-# Desktop apps, from Flathub. Not part of the image: install them per machine
-# after cloning this repo (fish or bash):
+# Desktop apps, from Flathub. Install them per machine after cloning this
+# repo (fish or bash):
 #
 #   flatpak install -y flathub $(grep -vE '^\s*(#|$)' flatpaks.txt)
 #

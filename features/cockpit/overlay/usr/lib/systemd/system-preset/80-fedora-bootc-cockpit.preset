@@ -1,2 +1,0 @@
-# Cockpit is opt-in per machine: sudo systemctl enable --now cockpit.socket
-disable cockpit.socket

@@ -36,7 +36,7 @@
     <keybind key="XF86_MonBrightnessDown"><action name="Execute" command="noctalia msg brightness-down"/></keybind>
   </keyboard>
 
-  <!-- Swiss layout, matching the image default and the initramfs keymap. -->
+  <!-- Swiss layout. -->
   <keyboard>
     <layout>
       <keyboardLayout layout="ch"/>

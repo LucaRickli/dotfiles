@@ -1,3 +1,0 @@
-# System-wide GSettings defaults; per-user settings still win.
-[org.gnome.desktop.interface]
-color-scheme='prefer-dark'

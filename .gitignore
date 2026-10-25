@@ -1,7 +1,3 @@
-# Build output
-output/
-*.qcow2
-
 # Log files
 *.log
 
@@ -16,9 +12,6 @@ output/
 secrets.*
 secret.*
 id_*
-# Anthropic's PUBLIC release key, which the dev builds check Claude Code's
-# signed manifest with (devtools/claude-code.sh).
-!devtools/claude-code.asc
 
 # Miscellaneous
 **/completions/copilot.fish

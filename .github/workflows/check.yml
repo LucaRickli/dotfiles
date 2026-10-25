@@ -1,64 +1,32 @@
-# Validate the dotfiles (home/.config, the stow package) with the tools inside
-# the published image (niri, noctalia, ghostty, fish, jq). Runs whenever they
-# change, so a broken config fails the push, not the next login. Pull requests
-# get it through ci.yml, the PR gate.
+# The dotfiles' syntax checks (check.sh) on every push to main and every pull
+# request. jq comes with the runner; fish is installed here.
 name: check
 
 on:
   push:
     branches: [main]
-    # Together with devcontainer.yml, flatpak.yml and ci.yml, must cover
-    # everything build.yml's paths-ignore excludes except the docs (**.md,
-    # docs/**) and flatpaks.txt, or a push touching only that runs
-    # no CI.
-    paths:
-      - "home/**"
-      - "dotfiles.sh"
-      - "scripts/check-dotfiles.sh"
-      - ".github/workflows/check.yml"
-      - ".github/actions/**"
+  pull_request:
   workflow_dispatch:
-  workflow_call:
+
+permissions:
+  contents: read
 
 defaults:
   run:
     shell: bash
 
 jobs:
-  dotfiles:
+  check:
     runs-on: ubuntu-26.04
-    timeout-minutes: 30
-    permissions:
-      contents: read
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      # The unsealed image is ~12 GB unpacked.
-      - name: Prepare the runner
-        uses: ./.github/actions/prepare-runner
-        with:
-          need: "25"
+      - name: Install fish
+        run: sudo apt-get update -q && sudo apt-get install -y -q fish
 
-      # dotfiles.sh is excluded from build.yml, so this is the only CI that
-      # ever looks at it.
-      - name: Shell syntax
-        run: sh -n dotfiles.sh
-
-      # No registry login: the image is public (machines and the install ISO
-      # pull it anonymously), and an anonymous pull does not depend on which
-      # repositories the package grants access to.
-      - name: Validate configs inside the image
-        run: |
-          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/fedora-bootc:latest"
-          for attempt in 1 2 3 4 5; do
-            podman pull --quiet "$image" >/dev/null && break
-            [ "$attempt" = 5 ] && { echo "could not pull $image" >&2; exit 1; }
-            echo "pull failed (attempt $attempt), retrying in 30s" >&2; sleep 30
-          done
-          podman run --rm \
-            -v ./scripts/check-dotfiles.sh:/run/check-dotfiles.sh:ro \
-            -v ./home/.config:/run/dotfiles:ro \
-            "$image" bash /run/check-dotfiles.sh /run/dotfiles
+      - name: Check
+        run: ./check.sh

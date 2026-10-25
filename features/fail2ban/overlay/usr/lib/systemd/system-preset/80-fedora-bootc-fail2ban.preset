@@ -1,2 +1,0 @@
-# Bans repeated login failures on sshd and xrdp (etc/fail2ban/).
-enable fail2ban.service

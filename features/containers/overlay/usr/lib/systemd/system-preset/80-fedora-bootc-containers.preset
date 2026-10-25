@@ -1,2 +1,0 @@
-# Docker: socket-activated, idle until the first `docker` command.
-enable docker.socket
